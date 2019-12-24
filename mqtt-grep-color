@@ -21,7 +21,7 @@ optmqqthost="-h localhost"  # configure your host here or in $HOME/.config/mosqu
 
 # for BusyBox grep - it cannot colorize...
 GREPOPTS="-E" && [ -z "$BUSYBOX" ] && GREPOPTS="$GREPOPTS --color=always --line-buffered"
-DATEFMT="+%H:%M:%S"  && [ -z "$BUSYBOX" ] && DATEFMT="+%H:%M:%S.%1N"
+# DATEFMT="+%H:%M:%S"  && [ -z "$BUSYBOX" ] && DATEFMT="+%H:%M:%S.%1N"
 
 ( mosquitto_sub $optmqqthost -R -v -t "$topic" ) \
 | GREP_COLOR="01;31"    grep $GREPOPTS -e '^[^ ]+'      \
