@@ -1,5 +1,5 @@
-# mqtt-grep-colorise
-mqtt-grep-colorise provides a shell script that subscribes to a MQTT topic, adds a time stamp, optionally greps for an expression and colorises the output. It wrote it to ease MQTT debugging on the command line.
+# mqtt-grep-color
+mqtt-grep-color provides a shell script that subscribes to a MQTT topic, adds a time stamp, optionally greps for an expression and colors the output. I wrote it to ease MQTT debugging on the command line.
 
 Notes:
 1. mqtt-grep-colorise relies on the colorizing feature of GNU grep. The BusyBox version of grep does not support coloring, so the script wont work on busybox.
