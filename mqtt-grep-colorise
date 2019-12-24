@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Usage: mqtt-grep-colorize <expr> <topic>
-# subscribe to the MQTT "topic" (Default: #) and colorize it, optionally grepping for "expr"
+# Usage: mqtt-grep-colorise <expr> <topic>
+# subscribe to the MQTT "topic" (Default: #) and colorise it, optionally grepping for "expr"
 
 # License: GNU General Public License v3.0
 # For more information see project "mqtt-grep-colorize" on GitHub.
