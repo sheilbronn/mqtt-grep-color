@@ -4,7 +4,7 @@
 # subscribe to the MQTT "topic" (Default: #) and colorize it, optionally grepping for "expr"
 
 # License: GNU General Public License v3.0
-# For more information see project "mqtt-grep-colorize" on GitHub.
+# For more information see project "mqtt-grep-color" on GitHub.
 
 set -o noglob     # file name globbing is neither needed or nor wanted
 set -o noclobber  # disable for security reasons
@@ -17,15 +17,17 @@ topic="${2:-#}"        # use '#' as MQTT topic, if nothing else given
 optmqqthost="-h localhost"  # configure your host here or in $HOME/.config/mosquitto_sub
 
 # Checks:
-( grep --help 2>&1 | grep -q BusyBox ) && BUSYBOX="yes" && echo "$0: Currently does not run on busybox! Stoppped." 1>&2 && exit 1
+( grep --help 2>&1 | grep -q BusyBox ) && BUSYBOX="yes" # && echo "$0: Currently does not run on busybox! Stoppped." 1>&2 && exit 1
 
-# for BusyBox grep - it cannot colorize...
+# for BusyBox grep - it cannot colorize - and the option line-buffered is also missing.
 GREPOPTS="-E" && [ -z "$BUSYBOX" ] && GREPOPTS="$GREPOPTS --color=always --line-buffered"
-# DATEFMT="+%H:%M:%S"  && [ -z "$BUSYBOX" ] && DATEFMT="+%H:%M:%S.%1N"
+# DATEFMT="+%H:%M:%S"  && [ -z "$BUSYBOX" ] && DATEFMT="+%H:%M:%S.%1N"   # awk doesn't know millisecs...
 
-( mosquitto_sub $optmqqthost -R -v -t "$topic" ) \
+# These are the following four steps for processing the MQTT stream: 1. color the topic red, 
+# 2. put the time in front, 3. color the time, 4. color the optional expression or curly brackets etc by default.
+{ mosquitto_sub $optmqqthost -v -t "$topic"   ; }           \
 | GREP_COLOR="01;31"    grep $GREPOPTS -e '^[^ ]+'      \
-| awk -- '{ print strftime("%H:%M:%S ") $0 } ; fflush() '  \
+| awk -- '{ print strftime("%H:%M:%S ") $0 ; fflush() ; next } '  \
 | GREP_COLOR="01;33"    grep $GREPOPTS -e "^..:..:.."   \
 | GREP_COLOR="01;32"    grep $GREPOPTS -e "$grepexp"    \
 ;
