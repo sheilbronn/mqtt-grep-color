@@ -6,5 +6,6 @@ Notes:
 2. **Non-printable characters** are removed from the mosquitto_sub output before further processing.
 3. It seems that **buffering on OpenWrt** works a lot different than on Raspbian. Line buffering with **BusyBox** is not possible there. Bulky delayed output is the consequence.
 
-Example usage with all parameters, i.e. <grep-expr>, <topic> and <mosquitto_sub-options>
+Example usage with all parameters, i.e. <grep-expr>, <topic> and <mosquitto_sub-options>:
+
 _mqtt-grep-color " "  "#"  "-R  -h test.mosquitto.org"_
