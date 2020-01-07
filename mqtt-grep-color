@@ -25,7 +25,7 @@ GREPOPTS="-E" && [ -z "$BUSYBOX" ] && GREPOPTS="$GREPOPTS --text --color=always 
 # These are the following four steps for processing the MQTT stream: 0. remove some non-printable stuff, 1. color the topic red, 
 # 2. put the time in front, 3. color the time, 4. color the optional expression or curly brackets etc by default.
 { mosquitto_sub $optmqqt -v -t "$topic"   ; }           \
-|                     $stdbufcmd_tr                    tr '\r[\000-\011][\013-\037]' ' '                       \
+|                     $stdbufcmd_tr                    tr '\r\000-\011\013-\037' ' '                       \
 | GREP_COLOR="01;31"  $stdbufcmd    grep $GREPOPTS -e '^[^ ]+| '      \
 | awk -- '{ print strftime("%H:%M:%S ") $0 ; fflush() ; next } '  \
 | GREP_COLOR="01;33"  $stdbufcmd    grep $GREPOPTS -e "^..:..:.."   \
