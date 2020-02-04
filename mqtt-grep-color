@@ -17,18 +17,21 @@ stdbufcmd=""
 
 # Other settings and helpers:
 stdbufcmd_tr=$( command -v stdbuf ) && stdbufcmd_tr="$stdbufcmd_tr --output=L" # use stdbuf for tr if available
+[ -z "$stdbufcmd_tr" ] && echo "$0: Warning: Please install stdbuf!" 1>&2
 { grep --help 2>&1 | grep -q BusyBox ; } && BUSYBOX="yes" && stdbufcmd="$stdbufcmd_tr" # ... and stdbuf also for grep if on BusyBox
 # for BusyBox grep - it cannot colorize - and the option line-buffered is also missing.
 GREPOPTS="-E" && [ -z "$BUSYBOX" ] && GREPOPTS="$GREPOPTS --text --color=always --line-buffered"
-# DATEFMT="+%H:%M:%S"  && [ -z "$BUSYBOX" ] && DATEFMT="+%H:%M:%S.%1N"   # awk doesn't know millisecs...
 
-# These are the following four steps for processing the MQTT stream: 0. remove some non-printable stuff, 1. color the topic red, 
+# https://askubuntu.com/questions/1042234/modifying-the-color-of-grep
+yellow="01;33"; red="01;31"; green="01;32"; blue="01;34" ; purple="01;35"
+
+# These are the following four steps for processing the MQTT stream: 0. remove some non-printable stuff, 1. color the topic red,
 # 2. put the time in front, 3. color the time, 4. color the optional expression or curly brackets etc by default.
 { mosquitto_sub $optmqqt -v -t "$topic"   ; }           \
-|                     $stdbufcmd_tr                    tr '\r\000-\011\013-\037' ' '                       \
-| GREP_COLOR="01;31"  $stdbufcmd    grep $GREPOPTS -e '^[^ ]+| '      \
+|                     $stdbufcmd_tr   tr '\r\000-\011\013-\037' ' '                       \
+| GREP_COLOR="$red"    $stdbufcmd    grep $GREPOPTS -e '^[^ ]+| '      \
 | awk -- '{ print strftime("%H:%M:%S ") $0 ; fflush() ; next } '  \
-| GREP_COLOR="01;33"  $stdbufcmd    grep $GREPOPTS -e "^..:..:.."   \
-| GREP_COLOR="01;32"  $stdbufcmd    grep $GREPOPTS -e "$grepexp"    \
-| GREP_COLOR="01;34"  $stdbufcmd    grep $GREPOPTS -e ",| "    \
+| GREP_COLOR="$yellow" $stdbufcmd    grep $GREPOPTS -e "^..:..:.."   \
+| GREP_COLOR="$green"  $stdbufcmd    grep $GREPOPTS -e "$grepexp"    \
+| GREP_COLOR="$blue"   $stdbufcmd    grep $GREPOPTS -e ",| "    \
 ;
