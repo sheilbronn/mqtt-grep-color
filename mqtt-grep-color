@@ -1,8 +1,9 @@
 #!/bin/sh
-# shellcheck shell=ash
 
-# Usage: mqqtgrep <expr> <topic>
+# Usage: mqqtgrep -e expr -h host -d -t topic  othermosquittoopts
 # subscribe to the MQTT "topic" (Default: #) and colorize it, optionally grepping for "expr"
+
+# shellcheck shell=ash        # prefer ash for use on OpenWrt
 
 # License: GNU General Public License v3.0
 # For more information see project "mqtt-grep-color" on GitHub.
@@ -11,7 +12,7 @@ set -o noglob     # file name globbing is neither needed or nor wanted
 set -f
 set -o noclobber  # disable for security reasons
 
-grepexp="[\}{ ]|\[\]|\[\{|\}\]" # colorize the }{, if no other grep expression given; space must be there!
+grepexp="[\}{ ]|\[\]|\[\{|\}\]" # colorize  }{, etc. if no other grep expression given; space must be there!
 topic="#"        # use '#' as MQTT topic, if nothing else given
 mqtthost="-v"     # use "-v" to make sure mqtthost     is not an empty option
 
@@ -39,7 +40,7 @@ do
     esac
 done
 
-shift "$((OPTIND-1))"   # Discard the rest of the options and sentinel --
+# shift "$((OPTIND-1))"   # Discard the rest of the options and sentinel --
 
 # Prepare settings and helpers such as stdbuf:
 stdbufcmd=""
