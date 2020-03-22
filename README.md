@@ -19,7 +19,12 @@ To connect to the default (local) broker and use the standard coloring for all m
 
 This show the usage with optional parameters such as the the _grep-expression_, the _MQTT topic_ and and the _MQTT broker_:
 ```sh
+  # follow any BBC subtitle stream and highlight the e's (dosn't make much sense but shows the capabilities)
   mqtt-grep-color -e e -t "bbc/#"  -h test.mosquitto.org
+```
+```sh
+  # follow BBC News 24 compacted subtitle stream 
+  mqtt-grep-color  -t "bbc/subtitles/bbc_news24/compacted"  -h test.mosquitto.org
 ```
 
 Additional stuff:
