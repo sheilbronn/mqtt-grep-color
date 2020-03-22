@@ -23,18 +23,18 @@ This show the usage with optional parameters such as the the _grep-expression_, 
 # follow any BBC subtitle stream, grep for lines with the's only and highlight them (dosn't make much sense but shows the capabilities)
 mqtt-grep-color -e the -t "bbc/#"  -h test.mosquitto.org
 ```
-```sh
 This results in output  like this (assuning the BBC newsfeed is still running):
 
-![Sample output from mqtt-grep-color](sample_bbc24_with_the.png?raw=true "Sample output")
+![Sample output from mqtt-grep-color with a grep option](sample_bbc24_with_the.png?raw=true "Sample output with grep expression")
 
+```sh
 # follow BBC News 24 compacted subtitle stream 
 mqtt-grep-color  -t "bbc/subtitles/bbc_news24/compacted"  -h test.mosquitto.org
 ```
 
-This results in output  like this (assuning the BBC newsfeed is still running):
+This command results in output like this (assuning the BBC newsfeed is still running):
 
-![Sample output from mqtt-grep-color](sample_bbc24.png?raw=true "Sample output")
+![Another sample output from mqtt-grep-color](sample_bbc24.png?raw=true "Sample output from the BBC MQTT feed")
 
 ### Additional stuff
 
