@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Usage: mqqtgrep -e expr -h host -d -t topic  othermosquittoopts
+# Usage: mqtt-grep-color -e expr -h host -d -t topic  othermosquittoopts
 # subscribe to the MQTT "topic" (Default: #) and colorize it, optionally grepping for "expr"
 
 # shellcheck shell=ash        # prefer ash for use on OpenWrt
