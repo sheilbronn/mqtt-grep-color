@@ -48,7 +48,7 @@ This command results in output like this (assuning the BBC newsfeed is still run
 1. As a shortcut, if you supply "test" as the broker host, it will be interpreted as test.mosquitto.org automatically.
 2. If you omit a `#` after a trailing `/`, the `#` will be added by default:
 
-```bash
+```sh
 # So the example from above could also be entered as:
 mqtt-grep-color -e e -t bbc/  -h test
 ```
