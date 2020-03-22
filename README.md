@@ -8,8 +8,12 @@ Notes:
 
 Example usage with all optional parameters, i.e. the grep-expression, the MQTT topic and and the MQTT broker:
 
-_mqtt-grep-color -e e -t "bbc/#"  -h test.mosquitto.org_
+  _mqtt-grep-color -e e -t "bbc/#"  -h test.mosquitto.org_
 
 Additional stuff:
 1. As a shortcut, if you give "test" as the broker host, it will be expanded to test.mosquitto.org automatically
 2. If you omit an _#_ after a trailing _/_ it will be added by default.
+
+So the sample command above could also be entered as:
+
+  _mqtt-grep-color -e e -t bbc/  -h test_
