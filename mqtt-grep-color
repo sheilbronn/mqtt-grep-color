@@ -3,7 +3,7 @@
 # Usage: mqtt-grep-color -e expr -h host -d -t topic  othermosquittoopts
 # subscribe to the MQTT "topic" (Default: #) and colorize it, optionally grepping for "expr"
 
-# shellcheck shell=ash        # prefer ash for use on OpenWrt
+# shellcheck shell=ash        # prefer ash, since it is preferred on OpenWrt
 
 # License: GNU General Public License v3.0
 # For more information see project "mqtt-grep-color" on GitHub.
@@ -13,12 +13,13 @@ set -f
 set -o noclobber  # disable for security reasons
 
 grepexp="[\}{ ]|\[\]|\[\{|\}\]" # colorize  }{, etc. if no other grep expression given; space must be there!
-topic="#"        # use '#' as MQTT topic, if nothing else given
-mqtthost="-v"     # use "-v" to make sure mqtthost     is not an empty option
-
+topic="#"         # use '#' as MQTT topic, if nothing else given
+mqtthost="-v"     # use "-v" to make sure mqtthost is not an empty option
 scriptname="${0##*/}"
 
-while getopts "?e:h:t:d" opt      
+### process command line options ###
+
+while getopts "?e:h:t:dx" opt      
 do
     case "$opt" in
     \?) echo "Usage: $scriptname -e expr -h host -d -t topic  othermosquittoopts" 1>&2
@@ -35,34 +36,36 @@ do
         ;;
     t)  topic=$( echo "$OPTARG" | sed -e 's:/$:/\#:' ) # as a service add \# to a trailing /
         ;;
-    d)  set -x
+    d|x)  set -x # turn on shell debugging from here on
         ;;
     esac
 done
 
-shift "$((OPTIND-1))"   # Discard the processed options --
+shift "$((OPTIND-1))"   # Discard options processed by getopts, remaining options will be passed to mosquitto_sub
 
-# Prepare settings and helpers such as stdbuf:
+### prepare settings and helpers such as stdbuf ###
+
 stdbufcmd=""
 stdbufcmd_tr=$( command -v stdbuf ) && stdbufcmd_tr="$stdbufcmd_tr --output=L" # use stdbuf for tr if available
 [ -z "$stdbufcmd_tr" ] && echo "$0: Warning: Install stdbuf for better line buffering!" 1>&2
 
-{ grep --help 2>&1 | grep -q BusyBox ; } && BUSYBOX="yes" && stdbufcmd="$stdbufcmd_tr" # ... and stdbuf also for grep if on BusyBox
-
 # for BusyBox grep - it cannot colorize - and the option line-buffered is also missing.
+{ grep --help 2>&1 | grep -q BusyBox ; } && BUSYBOX="yes" && stdbufcmd="$stdbufcmd_tr" # ... and stdbuf also for grep if on BusyBox
 GREPOPTS="-E" && [ -z "$BUSYBOX" ] && GREPOPTS="$GREPOPTS --text --color=always --line-buffered"
 
 # from https://askubuntu.com/questions/1042234/modifying-the-color-of-grep:
 yellow="01;33"; red="01;31"; green="01;32"; blue="01;34" ; purple="01;35"
 
+### do the real stuff from here ###
+
 # These are the following four steps for processing the MQTT stream: 0. remove some non-printable stuff, 1. color the topic red,
 # 2. put the time in front, 3. color the time, 4. color the optional expression or curly brackets etc by default.
 # N.B. No double quotes around ""
-{ mosquitto_sub $mqtthost -v -t "$topic" "$@"       ; }   \
-|                     $stdbufcmd_tr  tr '\r\000-\011\013-\037' ' '    \
-| GREP_COLOR="$red"    $stdbufcmd    grep $GREPOPTS -e '^[^ ]+| '      \
-| awk -- '{ print strftime("%H:%M:%S ") $0 ; fflush() ; next } '       \
+{ mosquitto_sub $mqtthost -v -t "$topic" "$@"       ; }              \
+|                     $stdbufcmd_tr  tr '\r\000-\011\013-\037' ' '   \
+| GREP_COLOR="$red"    $stdbufcmd    grep $GREPOPTS -e '^[^ ]+| '    \
+| awk -- '{ print strftime("%H:%M:%S ") $0 ; fflush() ; next } '     \
 | GREP_COLOR="$yellow" $stdbufcmd    grep $GREPOPTS -e "^..:..:.."   \
 | GREP_COLOR="$green"  $stdbufcmd    grep $GREPOPTS -e "$grepexp"    \
-| GREP_COLOR="$blue"   $stdbufcmd    grep $GREPOPTS -e ",| "    \
+| GREP_COLOR="$blue"   $stdbufcmd    grep $GREPOPTS -e ",| "         \
 ;
