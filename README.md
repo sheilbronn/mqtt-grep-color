@@ -20,22 +20,22 @@ mqtt-grep-color
 
 This show the usage with optional parameters such as the the _grep-expression_, the _MQTT topic_ and and the _MQTT broker_:
 ```sh
-# follow any BBC subtitle stream and highlight the e's (dosn't make much sense but shows the capabilities)
-mqtt-grep-color -e e -t "bbc/#"  -h test.mosquitto.org
+# follow any BBC subtitle stream, grep for lines with the's only and highlight them (dosn't make much sense but shows the capabilities)
+mqtt-grep-color -e the -t "bbc/#"  -h test.mosquitto.org
 ```
 ```sh
 # follow BBC News 24 compacted subtitle stream 
 mqtt-grep-color  -t "bbc/subtitles/bbc_news24/compacted"  -h test.mosquitto.org
 ```
+This results something like this (assuning the BBC newsfeed is still running)
+![Sample output from mqtt-grep-color](sample_bbc24_with_the.png?raw=true "Sample output")
 
 ### Additional stuff
 
 1. As a shortcut, if you supply "test" as the broker host, it will be interpreted as test.mosquitto.org automatically.
 2. If you omit a `#` after a trailing `/`, the `#` will be added by default:
 
-   So the example from above could also be entered as:
-
-```ash
+```bash
 # So the example from above could also be entered as:
 mqtt-grep-color -e e -t bbc/  -h test
 ```
