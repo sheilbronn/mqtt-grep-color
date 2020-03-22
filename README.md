@@ -24,11 +24,17 @@ This show the usage with optional parameters such as the the _grep-expression_, 
 mqtt-grep-color -e the -t "bbc/#"  -h test.mosquitto.org
 ```
 ```sh
+This results in output  like this (assuning the BBC newsfeed is still running):
+
+![Sample output from mqtt-grep-color](sample_bbc24_with_the.png?raw=true "Sample output")
+
 # follow BBC News 24 compacted subtitle stream 
 mqtt-grep-color  -t "bbc/subtitles/bbc_news24/compacted"  -h test.mosquitto.org
 ```
-This results something like this (assuning the BBC newsfeed is still running)
-![Sample output from mqtt-grep-color](sample_bbc24_with_the.png?raw=true "Sample output")
+
+This results in output  like this (assuning the BBC newsfeed is still running):
+
+![Sample output from mqtt-grep-color](sample_bbc24.png?raw=true "Sample output")
 
 ### Additional stuff
 
