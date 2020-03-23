@@ -67,6 +67,8 @@ yellow="01;33"; red="01;31"; green="01;32"; blue="01;34" ; purple="01;35"
 # These are the following four steps for processing the MQTT stream: 0. remove some non-printable stuff, 1. color the topic red,
 # 2. put the time in front, 3. color the time, 4. color the optional expression or curly brackets etc by default.
 # N.B. No double quotes around ""
+# N.B. very ugly hack with xxveryuniqstrxx, need to factorize that!
+
   mosquitto_sub $mqtthost -v -t "$topic" "$noretained" $maxcount  "$@"    \
 |                     $stdbufcmd_tr  tr '\r\000-\011\013-\037' ' '   \
 |                      $stdbufcmd_tr    sed -e 's:^\([a-zA-Z0-9$-_]*/[/a-zA-Z0-9$-_]*\) :\1xxveryuniqstrxx :'   -e 's/^\([a-zA-Z0-9$-_]+\) /\1xxveryuniqstrxx /' -e 's/$/ /'  \
@@ -77,6 +79,3 @@ yellow="01;33"; red="01;31"; green="01;32"; blue="01;34" ; purple="01;35"
 | GREP_COLOR="$green"  $stdbufcmd    grep $GREPOPTS -e "$grepexp"    \
 | GREP_COLOR="$blue"   $stdbufcmd    grep $GREPOPTS -e ",| "         \
 ;
-
-# $stdbufcmd    sed -e 's/^\([/a-zA-Z0-9$]*\)/++~~\1~~++/'
-# | awk -- '{ print ($0 ~ /xxdieshierxx/ ) ? strftime("%H:%M:%S ") : "" ; print $0 ; fflush() ; next } '     \
