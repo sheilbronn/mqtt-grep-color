@@ -61,5 +61,4 @@ https://www.hivemq.com/blog/mqtt-essentials-part-5-mqtt-topics-best-practices/
   Never use spaces in a topic.
   Use only ASCII characters, avoid non printable characters.
 
-2. Unfortunately, multi-line messages (containaing a line-feed char) are currently truncated without notice. This bug is BAD! 
-It relates to the "red" grep that must find something like a topic at the beginning of the line to let it pass through... I've been experimenting with the options -A and -B but they cause output delay. The underlying problem ist that the -v option to mosquitto_sub does not allow to differentiate the topic from a part of the message properly...
+2. Unfortunately, multi-line messages (containaing a line-feed char) from mosquitto_sub are hard to process, because the topic can hardly be diffrentiated from the message body on subsequent lines. The ugly hack introducing a unique string _XXshouldbetopicXX_ mitigates that to a certain extent, but maybe there is less imperfect solution...
