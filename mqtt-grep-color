@@ -69,9 +69,14 @@ yellow="01;33"; red="01;31"; green="01;32"; blue="01;34" ; purple="01;35"
 # N.B. No double quotes around ""
   mosquitto_sub $mqtthost -v -t "$topic" "$noretained" $maxcount  "$@"    \
 |                     $stdbufcmd_tr  tr '\r\000-\011\013-\037' ' '   \
-| GREP_COLOR="$red"    $stdbufcmd    grep $GREPOPTS -e '^[^ ]+| '    \
-| awk -- '{ print strftime("%H:%M:%S ") $0 ; fflush() ; next } '     \
-| GREP_COLOR="$yellow" $stdbufcmd    grep $GREPOPTS -e "^..:..:.."   \
+|                      $stdbufcmd_tr    sed -e 's:^\([a-zA-Z0-9$-_]*/[/a-zA-Z0-9$-_]*\) :\1xxveryuniqstrxx :'   -e 's/^\([a-zA-Z0-9$-_]+\) /\1xxveryuniqstrxx /' -e 's/$/ /'  \
+| GREP_COLOR="$red"    $stdbufcmd    grep $GREPOPTS -e '^[^ ]+xxveryuniqstrxx| '    \
+| awk -S -e '{ print $0 ~ /xxveryuniqstrxx/ ? strftime("%H:%M:%S ") $0 : $0 ; fflush() } '     \
+|                      $stdbufcmd_tr    sed -e 's/xxveryuniqstrxx//'    \
+| GREP_COLOR="$yellow" $stdbufcmd    grep $GREPOPTS -e "^..:..:..| "   \
 | GREP_COLOR="$green"  $stdbufcmd    grep $GREPOPTS -e "$grepexp"    \
 | GREP_COLOR="$blue"   $stdbufcmd    grep $GREPOPTS -e ",| "         \
 ;
+
+# $stdbufcmd    sed -e 's/^\([/a-zA-Z0-9$]*\)/++~~\1~~++/'
+# | awk -- '{ print ($0 ~ /xxdieshierxx/ ) ? strftime("%H:%M:%S ") : "" ; print $0 ; fflush() ; next } '     \

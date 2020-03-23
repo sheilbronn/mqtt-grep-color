@@ -52,3 +52,14 @@ This command results in output like this (assuning the BBC newsfeed is still run
 # So the example from above could also be entered as:
 mqtt-grep-color -e e -t bbc/  -h test
 ```
+
+### Issues
+1. IMHO, the assumptions made regarding the coloring of the topic string should be based on these best practices. This is not enforced yet:  
+https://www.hivemq.com/blog/mqtt-essentials-part-5-mqtt-topics-best-practices/ 
+
+  Never use a leading forward slash.
+  Never use spaces in a topic.
+  Use only ASCII characters, avoid non printable characters.
+
+2. Unfortunately, multi-line messages (containaing a line-feed char) are currently truncated without notice. This bug is BAD! 
+It relates to the "red" grep that must find something like a topic at the beginning of the line to let it pass through... I've been experimenting with the options -A and -B but they cause output delay. The underlying problem ist that the -v option to mosquitto_sub does not allow to differentiate the topic from a part of the message properly...
