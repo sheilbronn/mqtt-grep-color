@@ -54,8 +54,9 @@ mqtt-grep-color -e e -t bbc/  -h test
 ```
 
 ### Issues
-1. IMHO, the assumptions made regarding the coloring of the topic string should be based on these best practices. This is not enforced yet:  
-https://www.hivemq.com/blog/mqtt-essentials-part-5-mqtt-topics-best-practices/ 
+
+1. IMHO, the assumptions made regarding the coloring of the topic string should be based on the following best practices. However, here it is not enforced yet:  
+<https://www.hivemq.com/blog/mqtt-essentials-part-5-mqtt-topics-best-practices/>
 
   Never use a leading forward slash.
   Never use spaces in a topic.
