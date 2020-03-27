@@ -12,7 +12,32 @@ set -o noglob     # file name globbing is neither needed or nor wanted
 set -f
 set -o noclobber  # disable for security reasons
 
-grepexp="[\}{ ]|\[\]|\[\{|\}\]" # colorize  }{, etc. if no other grep expression given; space must be there!
+### prepare settings and helpers such as stdbuf ###
+
+stdbufcmd=""
+stdbufcmd_tr=$( command -v stdbuf ) && stdbufcmd_tr="$stdbufcmd_tr --output=L" # use stdbuf for tr if available
+
+# colors from https://askubuntu.com/questions/1042234/modifying-the-color-of-grep :
+yellow="01;33"; red="01;31"; green="01;32"; blue="01;34" ; purple="01;35"
+
+# settings for BusyBox grep - it cannot colorize. And the option line-buffered is also missing.
+{ grep --help 2>&1 | grep -q BusyBox ; } && BUSYBOX="yes" && stdbufcmd="$stdbufcmd_tr" # ... and stdbuf also for grep if on BusyBox
+
+if [ "$BUSYBOX" ] 
+then
+    # I'm on BusyBox
+    grepexp="[\}{ ]|\[\]|\[\{|\}\]" # { must be escaped
+    # colorizes  }{, etc. if no other grep expression given; space must be there!
+    [ -z "$stdbufcmd_tr" ] && echo "$0: Warning: Install stdbuf for better line buffering! (Package coreutils-stdbuf on OpenWrt)" 1>&2
+else
+    # Not on BusyBox
+    grepexp="[\}{ ]|\[\]|\[{|\}\]"  # { must NOT be escaped
+    GREPOPTS="--text --color=always --line-buffered"
+    [ -z "$stdbufcmd_tr" ] && echo "$0: Warning: Install stdbuf for better line buffering!" 1>&2
+fi
+
+command -v mosquitto_sub > /dev/null || { echo "$0: Error: Install mosquitto_sub first, e.g. from mosquitto-client-nossl" 1>&2 ; exit 1 ;  }
+
 topic="#"         # use '#' as MQTT topic, if nothing else given
 mqtthost="-v"     # use "-v" to make sure mqtthost is not an empty option
 noretained="-v"     # use "-v" to make sure mqtthost is not an empty option
@@ -49,19 +74,6 @@ done
 
 shift "$((OPTIND-1))"   # Discard options processed by getopts, remaining options will be passed to mosquitto_sub
 
-### prepare settings and helpers such as stdbuf ###
-
-stdbufcmd=""
-stdbufcmd_tr=$( command -v stdbuf ) && stdbufcmd_tr="$stdbufcmd_tr --output=L" # use stdbuf for tr if available
-[ -z "$stdbufcmd_tr" ] && echo "$0: Warning: Install stdbuf for better line buffering!" 1>&2
-
-# for BusyBox grep - it cannot colorize - and the option line-buffered is also missing.
-{ grep --help 2>&1 | grep -q BusyBox ; } && BUSYBOX="yes" && stdbufcmd="$stdbufcmd_tr" # ... and stdbuf also for grep if on BusyBox
-GREPOPTS="-E" && [ -z "$BUSYBOX" ] && GREPOPTS="$GREPOPTS --text --color=always --line-buffered"
-
-# from https://askubuntu.com/questions/1042234/modifying-the-color-of-grep
-yellow="01;33"; red="01;31"; green="01;32"; blue="01;34" ; purple="01;35"
-
 ### do the real stuff from here ###
 
 # These are the following four steps for processing the MQTT stream: 0. remove some non-printable stuff, 1. color the topic red,
@@ -70,12 +82,11 @@ yellow="01;33"; red="01;31"; green="01;32"; blue="01;34" ; purple="01;35"
 # N.B. very ugly hack with XXshouldbetopicXX to mark a typical MQTT topic, need to factorize that!
 
   mosquitto_sub $mqtthost -v -t "$topic" "$noretained" $maxcount  "$@"    \
-|                     $stdbufcmd_tr  tr '\r\000-\011\013-\037' ' '   \
-|                     $stdbufcmd_tr  sed -e 's:^\([a-zA-Z0-9$_+-]*/[/a-zA-Z0-9$_+-]*\) :\1XXshouldbetopicXX :'   -e 's/^\([a-zA-Z0-9$_+-]+\) /\1XXshouldbetopicXX /' -e 's/$/ /'  \
-| GREP_COLOR="$red"    $stdbufcmd    grep $GREPOPTS -e '[^ ]+XXshouldbetopicXX| '    \
-| awk -S -e '{ print $0 ~ /XXshouldbetopicXX/ ? strftime("%H:%M:%S ") $0 : $0 ; fflush() } '     \
+|                     $stdbufcmd_tr  sed -e 's/[^[:print:]]//g' -e 's:^\([a-zA-Z0-9$_+-]*/[/a-zA-Z0-9$_+-]*\) :\1XXshouldbetopicXX :'   -e 's/^\([a-zA-Z0-9$_+-]+\) /\1XXshouldbetopicXX /' -e 's/$/ /'  \
+| GREP_COLOR="$red"    $stdbufcmd    grep $GREPOPTS -E -e '[^ ]+XXshouldbetopicXX| '    \
+| awk -e '{ print $0 ~ /XXshouldbetopicXX/ ? strftime("%H:%M:%S ") $0 : $0 ; fflush() } '     \
 |                      $stdbufcmd_tr    sed -e 's/XXshouldbetopicXX//'    \
-| GREP_COLOR="$yellow" $stdbufcmd    grep $GREPOPTS -e "^..:..:..| "   \
-| GREP_COLOR="$green"  $stdbufcmd    grep $GREPOPTS -e "$grepexp"    \
-| GREP_COLOR="$blue"   $stdbufcmd    grep $GREPOPTS -e ",| "         \
+| GREP_COLOR="$yellow" $stdbufcmd    grep $GREPOPTS -E -e ' |^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]'   \
+| GREP_COLOR="$green"  $stdbufcmd    grep $GREPOPTS -E -e "$grepexp"    \
+| GREP_COLOR="$blue"   $stdbufcmd    grep $GREPOPTS -E -e " |,"         \
 ;
