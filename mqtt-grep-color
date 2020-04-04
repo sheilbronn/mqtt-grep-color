@@ -42,11 +42,13 @@ topic="#"         # use '#' as MQTT topic, if nothing else given
 mqtthost="-v"     # use "-v" to make sure mqtthost is not an empty option
 noretained="-v"     # use "-v" to make sure mqtthost is not an empty option
 maxcount="-v"     # use "-v" to make sure mqtthost is not an empty option
+awkTimeFormat="%H:%M:%S"
+awkTimeLen=8            # for "hh:mm:ss"
 scriptname="${0##*/}"
 
 ### process command line options ###
 
-while getopts "?e:h:t:RC:dx" opt      
+while getopts "?e:h:t:RC:sdx" opt      
 do
     case "$opt" in
     \?) echo "Usage: $scriptname -e expr -h host -d -t topic  othermosquittoopts" 1>&2
@@ -67,6 +69,9 @@ do
         ;;
     C)  maxcount="-C $( echo "$OPTARG" | tr -d 'a-zA-Z\r\000-\011\013-\037' )" # clean up for sec purposes
         ;;
+    s)  awkTimeFormat="%s"
+        awkTimeLen=3 # not used yet
+        ;;
     d|x)  set -x # turn on shell debugging from here on
         ;;
     esac
@@ -76,17 +81,17 @@ shift "$((OPTIND-1))"   # Discard options processed by getopts, remaining option
 
 ### do the real stuff from here ###
 
-# These are the following four steps for processing the MQTT stream: 0. remove some non-printable stuff, 1. color the topic red,
+# These are the following four steps for processing the MQTT stream: 0. remove any non-printable stuff, 1. color the topic red,
 # 2. put the time in front, 3. color the time, 4. color the optional expression or curly brackets etc by default.
 # N.B. No double quotes around ""
 # N.B. very ugly hack with XXshouldbetopicXX to mark a typical MQTT topic, need to factorize that!
 
   mosquitto_sub $mqtthost -v -t "$topic" "$noretained" $maxcount  "$@"    \
-|                     $stdbufcmd_tr  sed -e 's/[^[:print:]]//g' -e 's:^\([a-zA-Z0-9$_+-]*/[/a-zA-Z0-9$_+-]*\) :\1XXshouldbetopicXX :'   -e 's/^\([a-zA-Z0-9$_+-]+\) /\1XXshouldbetopicXX /' -e 's/$/ /'  \
-| GREP_COLOR="$red"    $stdbufcmd    grep $GREPOPTS -E -e '[^ ]+XXshouldbetopicXX| '    \
-| awk -e '{ print $0 ~ /XXshouldbetopicXX/ ? strftime("%H:%M:%S ") $0 : $0 ; fflush() } '     \
-|                      $stdbufcmd_tr    sed -e 's/XXshouldbetopicXX//'    \
-| GREP_COLOR="$yellow" $stdbufcmd    grep $GREPOPTS -E -e ' |^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]'   \
-| GREP_COLOR="$green"  $stdbufcmd    grep $GREPOPTS -E -e "$grepexp"    \
-| GREP_COLOR="$blue"   $stdbufcmd    grep $GREPOPTS -E -e " |,"         \
+|                   $stdbufcmd_tr  sed -e 's/[^[:print:]]//g' -e 's:^\([a-zA-Z0-9$_+-]*/[/a-zA-Z0-9$_+-]*\) :\1XXshouldbeTopicXX :'   -e 's/^\([a-zA-Z0-9$_+-]+\) /\1XXshouldbetopicXX /' -e 's/$/ /'  \
+| GREP_COLOR="$red"    $stdbufcmd  grep $GREPOPTS -E -e '[^ ]+XXshouldbeTopicXX| '    \
+| awk -v timeLen="$awkTimeLen" -v timeFormat="$awkTimeFormat" -e '{ print ($0 ~ /XXshouldbeTopicXX/ ? "XXshouldbeTimeXX" strftime(timeFormat " ") : "" ) $0 ; fflush() } '     \
+| GREP_COLOR="$yellow" $stdbufcmd  grep $GREPOPTS -E -e ' |^XXshouldbeTimeXX[0-9:]+'   \
+|                   $stdbufcmd_tr  sed -e 's/XXshouldbeTimeXX//g' -e 's/XXshouldbeTopicXX//'    \
+| GREP_COLOR="$green"  $stdbufcmd  grep $GREPOPTS -E -e "$grepexp"    \
+| GREP_COLOR="$blue"   $stdbufcmd  grep $GREPOPTS -E -e " |,"         \
 ;
