@@ -4,7 +4,7 @@
 
 ### Usage
 ```sh
-  mqtt-grep-color -e <grepexpr> -h <brokerhost> -d -t <MQTT topic>
+  mqtt-grep-color -e <grepexpr> -h <brokerhost> -d -t <MQTT topic> -s
 ```
 
 ### Notes
