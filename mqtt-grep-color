@@ -100,25 +100,27 @@ shift "$((OPTIND-1))"   # Discard options processed by getopts, any remaining op
 | awk -v timeLen="$awkTimeLen" -v timeFormat="$awkTimeFormat" -v deltaTime="$awkDeltaTime" -v noCol="$noColor" -e '
   BEGIN                   { t=systime() }
                           { gsub( /[^[:print:]]/ , "" )  } 
-  /^[a-z\/A-Z0-9$_+-]+ /  { 
+  /^[.)(a-z\/A-Z0-9$&_+-]+ /  { 
                             s = "00000000000000" strftime(timeFormat, systime() - (deltaTime ? t  : 0) ) ;
                             s = substr( s, length(s)-timeLen +1)
                             if ( noCol == "yes" ) {
                                 print  s " " $0 ;
                             } else {
-                                print "XXshouldbeTimeXX" s " " gensub( "^[/a-zA-Z0-9$_+-]*", "\\0XXshouldbeTopicXX", 1 , $0) ;
+                                print "XXshouldbeTimeXX" s " " gensub( "^[.)(/a-zA-Z0-9$&_+-]*", "\\0XXshouldbeTopicXX", 1 , $0) ;
                             }
                             fflush()
                             next
                         } 
                         { print $0 " " ; fflush() } '    \
 | if [ -z "$noColor" ] ; then
-      GREP_COLOR="$red"    $stdbufcmd  grep $GREPOPTS -E -e ' |[/a-zA-Z0-9$_+-]+XXshouldbeTopicXX'    \
-    | GREP_COLOR="$yellow" $stdbufcmd  grep $GREPOPTS -E -e ' |^XXshouldbeTimeXX[0-9:]+'   \
-    | GREP_COLOR="$green"  $stdbufcmd  grep $GREPOPTS -E -e "$grepexp"    \
-    | GREP_COLOR="$blue"   $stdbufcmd  grep $GREPOPTS -E -e "^|,"         \
-    |                   $stdbufcmd_tr  sed -e 's/XXshouldbeTimeXX//g' -e 's/XXshouldbeTopicXX//'    \
+      GREP_COLOR="$red"    $stdbufcmd  grep $GREPOPTS -E -e "^" -e '[.)(/a-zA-Z0-9$&_+-]+XXshouldbeTopicXX'    \
+    | GREP_COLOR="$yellow" $stdbufcmd  grep $GREPOPTS -E -e "^" -e '^XXshouldbeTimeXX[0-9:]+'   \
+    | GREP_COLOR="$green"  $stdbufcmd  grep $GREPOPTS -E -e "$grepexp"      \
+    | GREP_COLOR="$blue"   $stdbufcmd  grep $GREPOPTS -E -e "^" -e ","        \
+    | awk -- '{ gsub( "XXshouldbeTimeXX|XXshouldbeTopicXX" , "" ); print  }'  \
     ;
 else
     awk -- '{ print ; fflush() }' # use awk since cat might not be line-buffered on OpenWrt / BusyBox
 fi
+
+#  $stdbufcmd_tr  sed -e 's/XXshouldbeTimeXX//g' -e 's/XXshouldbeTopicXX//'    \
