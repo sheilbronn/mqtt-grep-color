@@ -14,41 +14,41 @@ set -o noclobber  # disable for security reasons
 
 ### prepare settings and helpers such as stdbuf ###
 
+scriptname="${0##*/}"
 stdbufcmd=""
-stdbufcmd_tr=$( command -v stdbuf ) && stdbufcmd_tr="$stdbufcmd_tr --output=L" # use stdbuf for tr if available
+stdbufcmd_tr=$( command -v stdbuf ) && stdbufcmd_tr="$stdbufcmd_tr --output=L" # use stdbuf for tr if it is available
 
-# colors from https://askubuntu.com/questions/1042234/modifying-the-color-of-grep :
+# color definitions from https://askubuntu.com/questions/1042234/modifying-the-color-of-grep :
 yellow="01;33"; red="01;31"; green="01;32"; blue="01;34" ; purple="01;35"
 
-# settings for BusyBox grep - it cannot colorize. And the option line-buffered is also missing.
+# other settings for BusyBox grep - since it cannot colorize. And the option line-buffered is also missing.
 { grep --help 2>&1 | grep -q BusyBox ; } && BUSYBOX="yes" && stdbufcmd="$stdbufcmd_tr" # ... and stdbuf also for grep if on BusyBox
 
 if [ "$BUSYBOX" ] 
 then
     # I'm on BusyBox
-    grepexp="[\}{ ]|\[\]|\[\{|\}\]" # { must be escaped
+    grepexp="^ *$|[\}{ ]|\[\]|\[\{|\}\]" # { must be escaped
     # colorizes  }{, etc. if no other grep expression given; space must be there!
-    [ -z "$stdbufcmd_tr" ] && echo "$0: Warning: Install stdbuf for better line buffering! (Package coreutils-stdbuf on OpenWrt)" 1>&2
+    [ "$stdbufcmd_tr" ] || echo "$scriptname: Warning: Install stdbuf for better line buffering! (Package coreutils-stdbuf on OpenWrt)" 1>&2
 else
     # Not on BusyBox
-    grepexp="[\}{ ]|\[\]|\[{|\}\]"  # { must NOT be escaped
+    grepexp="^ *$|[\}{ ]|\[\]|\[{|\}\]"  # { must NOT be escaped
     GREPOPTS="--text --color=always --line-buffered"
-    [ -z "$stdbufcmd_tr" ] && echo "$0: Warning: Install stdbuf for better line buffering!" 1>&2
+    [ "$stdbufcmd_tr" ] || echo "$scriptname: Warning: Install stdbuf for better line buffering!" 1>&2
 fi
 
-command -v mosquitto_sub > /dev/null || { echo "$0: Error: Install mosquitto_sub first, e.g. from mosquitto-client-nossl" 1>&2 ; exit 1 ;  }
+command -v mosquitto_sub > /dev/null || { echo "$0: Error: Install mosquitto_sub first, e.g. from package mosquitto-client-nossl" 1>&2 ; exit 1 ;  }
 
-topic="#"         # use '#' as MQTT topic, if nothing else given
 mqtthost="-v"     # use "-v" to make sure mqtthost is not an empty option
 noretained="-v"     # use "-v" to make sure mqtthost is not an empty option
 maxcount="-v"     # use "-v" to make sure mqtthost is not an empty option
 awkTimeFormat="%H:%M:%S"
-awkTimeStart=1            # for "hh:mm:ss"
-scriptname="${0##*/}"
+awkTimeLen=8            # for "hh:mm:ss"
+awkDeltaTime=0            # default
 
 ### process command line options ###
 
-while getopts "?e:h:t:RC:sdx" opt      
+while getopts "?e:h:t:T:RC:scndx" opt      
 do
     case "$opt" in
     \?) echo "Usage: $scriptname -e expr -h host -d -t topic  othermosquittoopts" 1>&2
@@ -63,35 +63,62 @@ do
             mqtthost="-h $( echo $mqtthost | tr -d ':()"^%$ \r\000-\011\013-\037')" # clean up for sec purposes
         fi
         ;;
-    t)  topic=$( echo "$OPTARG" | sed -e 's:/$:/\#:' ) # as a service add \# to a trailing /
+    t)  topics="$topics -t $( echo "$OPTARG" | sed -e 's:/$:/\#:' )" # as a service add \# to a trailing /
+        ;;
+    T)  topics="$topics -T $( echo "$OPTARG" | sed -e 's:/$:/\#:' )"
         ;;
     R)  noretained="-R"
         ;;
     C)  maxcount="-C $( echo "$OPTARG" | tr -d 'a-zA-Z\r\000-\011\013-\037' )" # clean up for sec purposes
         ;;
+    n)  noColor="yes"
+        ;;
+    c)
+        ;;  
     s)  awkTimeFormat="%s"
-        awkTimeStart=8 # only the last three digits (len of %s is 11)
+        awkTimeLen=3 # only the last three digits (len of %s is 11)
+        awkDeltaTime=1
         ;;
     d|x)  set -x # turn on shell debugging from here on
         ;;
     esac
 done
 
-shift "$((OPTIND-1))"   # Discard options processed by getopts, remaining options will be passed to mosquitto_sub
+shift "$((OPTIND-1))"   # Discard options processed by getopts, any remaining options will be passed to mosquitto_sub
+
+[ -z "$topics" ] && topics="-t #"         # use '#' as MQTT topic, if nothing else given
 
 ### do the real stuff from here ###
 
-# These are the following four steps for processing the MQTT stream: 0. remove any non-printable stuff, 1. color the topic red,
-# 2. put the time in front, 3. color the time, 4. color the optional expression or curly brackets etc by default.
-# N.B. No double quotes around ""
-# N.B. very ugly hack with XXshouldbetopicXX to mark a typical MQTT topic, need to factorize that!
+# These are the following four steps for processing the MQTT stream: 
+# 0. remove any non-printable stuff, 1. color the MQTT topic red,
+# 2. put the time in front and color it yellow, 3. color the optional grep expression or curly brackets etc by default.
+# N.B. the very ugly hack with XXshouldbetopicXX is used to mark a typical MQTT topic for further grepping!
+# N.B. a space at the end of the line makes sure that everything goes through unless grepexp ist set specifically
 
-  mosquitto_sub $mqtthost -v -t "$topic" "$noretained" $maxcount  "$@"    \
-|                   $stdbufcmd_tr  sed -e 's/[^[:print:]]//g' -e 's:^\([a-zA-Z0-9$_+-]*/[/a-zA-Z0-9$_+-]*\) :\1XXshouldbeTopicXX :'   -e 's/^\([a-zA-Z0-9$_+-]+\) /\1XXshouldbetopicXX /' -e 's/$/ /'  \
-| GREP_COLOR="$red"    $stdbufcmd  grep $GREPOPTS -E -e '[^ ]+XXshouldbeTopicXX| '    \
-| awk -v timeStart="$awkTimeStart" -v timeFormat="$awkTimeFormat" -e 'BEGIN { t=systime() } /XXshouldbeTopicXX/ { print "XXshouldbeTimeXX" substr(strftime(timeFormat), timeStart) " " $0 } { fflush() } '     \
-| GREP_COLOR="$yellow" $stdbufcmd  grep $GREPOPTS -E -e ' |^XXshouldbeTimeXX[0-9:]+'   \
-|                   $stdbufcmd_tr  sed -e 's/XXshouldbeTimeXX//g' -e 's/XXshouldbeTopicXX//'    \
-| GREP_COLOR="$green"  $stdbufcmd  grep $GREPOPTS -E -e "$grepexp"    \
-| GREP_COLOR="$blue"   $stdbufcmd  grep $GREPOPTS -E -e " |,"         \
-;
+  mosquitto_sub $mqtthost -v $topics "$noretained" $maxcount  "$@"    \
+| awk -v timeLen="$awkTimeLen" -v timeFormat="$awkTimeFormat" -v deltaTime="$awkDeltaTime" -v noCol="$noColor" -e '
+  BEGIN                   { t=systime() }
+                          { gsub( /[^[:print:]]/ , "" )  } 
+  /^[a-z\/A-Z0-9$_+-]+ /  { 
+                            s = "00000000000000" strftime(timeFormat, systime() - (deltaTime ? t  : 0) ) ;
+                            s = substr( s, length(s)-timeLen +1)
+                            if ( noCol == "yes" ) {
+                                print  s " " $0 ;
+                            } else {
+                                print "XXshouldbeTimeXX" s " " gensub( "^[/a-zA-Z0-9$_+-]*", "\\0XXshouldbeTopicXX", 1 , $0) ;
+                            }
+                            fflush()
+                            next
+                        } 
+                        { print $0 " " ; fflush() } '    \
+| if [ -z "$noColor" ] ; then
+      GREP_COLOR="$red"    $stdbufcmd  grep $GREPOPTS -E -e ' |[/a-zA-Z0-9$_+-]+XXshouldbeTopicXX'    \
+    | GREP_COLOR="$yellow" $stdbufcmd  grep $GREPOPTS -E -e ' |^XXshouldbeTimeXX[0-9:]+'   \
+    | GREP_COLOR="$green"  $stdbufcmd  grep $GREPOPTS -E -e "$grepexp"    \
+    | GREP_COLOR="$blue"   $stdbufcmd  grep $GREPOPTS -E -e "^|,"         \
+    |                   $stdbufcmd_tr  sed -e 's/XXshouldbeTimeXX//g' -e 's/XXshouldbeTopicXX//'    \
+    ;
+else
+    awk -- '{ print ; fflush() }' # use awk since cat might not be line-buffered on OpenWrt / BusyBox
+fi
