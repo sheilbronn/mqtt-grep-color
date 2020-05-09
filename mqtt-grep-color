@@ -34,6 +34,7 @@ then
 else
     # Not on BusyBox
     grepexp="^ *$|[\}{ ]|\[\]|\[{|\}\]"  # { must NOT be escaped
+    # grepexp="$grepexp| PNG"
     GREPOPTS="--text --color=always --line-buffered"
     [ "$stdbufcmd_tr" ] || echo "$scriptname: Warning: Install stdbuf for better line buffering!" 1>&2
 fi
@@ -80,7 +81,7 @@ do
         ;;
     n)  noColor="yes"
         ;;
-    c)
+    c)  awkAdditionalSkipLines="1"
         ;;  
     p)  if command -v json_pp ; then
             jsonppcmd=json_pp
@@ -112,22 +113,44 @@ shift "$((OPTIND-1))"   # Discard options processed by getopts, any remaining op
 rcfile="/tmp/mqc.$$"
 
 mosquitto_sub $mqtthost -v $topics "$noretained" $maxcount  "$@"   \
-| awk -v timeLen="$awkTimeLen" -v timeFormat="$awkTimeFormat" -v deltaTime="$awkDeltaTime" -v noCol="$noColor" -e '
-  BEGIN                   { t=systime() }
-                          { gsub( /[^[:print:]]/ , "" )  } # eliminate non-printable characters
-  /^[.)(a-z\/A-Z0-9$&%;_+-]+ /  { 
+| awk -b -v timeLen="$awkTimeLen" -v timeFormat="$awkTimeFormat" -v deltaTime="$awkDeltaTime" \
+      -v noCol="$noColor" -v additionalSkipLines="$awkAdditionalSkipLines" -e '
+  BEGIN                   { # pngprefix=sprintf("%c%c%c%c%c%c%c%c", 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+                            pngprefix=sprintf("%c%c%c%c%c", 0x89, 0x50, 0x4E, 0x47, 0x0D) # workaround because of line split
+                            jpgprefix=sprintf("%c%c%c",   0xFF, 0xD8, 0xFF)       # shortened workaround for JPEG/JFIF
+                            t=systime() }
+  /^[.)(a-z\/A-Z0-9$&%;_+-]{2,200} /  { # topics are assumed to have a certain length (2-200), reduces garbage
+                            match($0, /^[.)(a-z\/A-Z0-9$&%;_+-]+/)
+                            limitpos=RLENGTH+1
+                            topic=substr($0, 1, limitpos-1)
+                            message=substr($0, limitpos+1, 9999)
+                
+                            imagefound= match(message, "^" pngprefix ) ? "PNG" : ( match(message, "^" jpgprefix ) ? "JPEG" : "" )
+                            # clean message before printing:
+                            gsub( /[^[:print:]]/ , "", topic )
+                            gsub( /[^[:print:]]/ , "", message )
+                            # print imagefound "##" limitpos "##" topic "##"message"##"
                             timestr = "00000000000000" strftime(timeFormat, systime() - (deltaTime ? t  : 0) ) ;
                             timestr = substr( timestr, length(timestr)-timeLen +1)
+                            if ( imagefound != "" ) {
+                                message="<BINARY FORMAT: " imagefound ">"
+                            }
                             if ( noCol == "yes" ) {
-                                print  timestr "  " $0 ;
+                                printf "%s %s  %s\n",  timestr , topic, message
                             } else {
-                                print "XXshouldbeTimeXX" timestr " " gensub( "^[.)(/a-zA-Z0-9$&%;_+-]*", "\\0XXEndOfTopicXX", 1 , $0) ;
+                                printf "%s %s %s\n" , "XXshouldbeTimeXX" timestr, gensub( "^[.)(/a-zA-Z0-9$&%;_+-]*", "\\0XXEndOfTopicXX", 1 , topic), message 
                                 # "\033[0;31m" $0 "\033[0m"
                             }
                             fflush()
                             next
                         } 
-                        { print $0 " " ; fflush() } '    \
+                        { # print printable characters of all other lines, but skip the binary data of images:
+                          if ( (imagefound == "") && ! ( additionalSkipLines == "1" ) ) {
+                           gsub( /[^[:print:]]/ , "", $0 )
+                           printf "%s \n", $0
+                           fflush() 
+                          }
+                        } '    \
 | if [ -z "$noColor" ] ; then
       GREP_COLOR="$red"    $stdbufcmd  grep $GREPOPTS -E -e "^" -e '[.)(/a-zA-Z0-9$&%;_+-]+XXEndOfTopicXX'    \
     | GREP_COLOR="$magenta" $stdbufcmd  grep $GREPOPTS -E -e "^" -e '/\$[a-z]+XXEndOfTopicXX'    \
