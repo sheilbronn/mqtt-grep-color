@@ -12,9 +12,10 @@ These features ease MQTT debugging on the command line quite a bit as you can se
 1. mqtt-grep-color relies heavily on the **output coloring feature of GNU grep**. However, the BusyBox version of grep does not support coloring, so the script can't color the output on busybox.
 2. **Non-printable characters** are removed from the mosquitto_sub output before further processing.
 3. If you have a BusyBox grep that doesn't support line buffering, try to install the command stdbuf, i.e. package "coreutils-stdbuf" on OpenWrt. Otherwise, ugly, bulky,delayed output might be the consequence.... (the script warns about this)
-4. Coloring is optional - use option -n to avoid it
-5. If you prefer a time stamp instead of the wallclock time, use option -s
-6. The options -t , -T and -c are passed to mosquitto_sub.
+4. Coloring is optional - use option -n to avoid it.
+5. Wellknown binary data (e.g. JPG, PNG) is replaced by a appropiate marker.
+6. If you prefer a time stamp instead of the wallclock time, use option -s
+7. The options -t , -T and -c are passed to mosquitto_sub.
 
 ### Examples
 
