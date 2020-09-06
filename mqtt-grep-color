@@ -10,7 +10,6 @@
 # For more information see project "mqtt-grep-color" on GitHub.
 
 set -o noglob     # file name globbing is neither needed or nor wanted
-set -f
 set -o noclobber  # disable for security reasons
 
 ### prepare settings and helpers such as stdbuf ###
@@ -56,7 +55,7 @@ remove_unwanted_chars() {
 
 ### process command line options ###
 
-while getopts "?e:h:t:T:RC:scdnpx" opt      
+while getopts "?e:h:t:T:RC:sconpx" opt      
 do
     case "$opt" in
     \?) echo "Usage: $scriptname -e expr -h host -d -t topic  othermosquittoopts" 1>&2
@@ -93,7 +92,9 @@ do
         awkTimeLen=3 # only the last three digits (len of %s is 11)
         awkDeltaTime=1
         ;;
-    d|x)  set -x # turn on shell debugging from here on
+    o)  awkOptimizeJSON="1"
+        ;;
+    x)  set -x # turn on shell debugging from here on
         ;;
     esac
 done
@@ -105,47 +106,55 @@ shift "$((OPTIND-1))"   # Discard options processed by getopts, any remaining op
 ### do the real stuff from here ###
 
 # These are the following four steps for processing the MQTT stream: 
-# 0. remove any non-printable stuff, 1. color the MQTT topic red,
+# 0. remove any non-printable stuff, 
+# 1. color the MQTT topic red,
 # 2. put the time in front and color it yellow, 3. color the optional grep expression or curly brackets etc by default.
 # N.B. the very ugly hack with XXEndOfTopicXX is used to mark a typical MQTT topic for further grepping!
 # N.B. a space at the end of the line makes sure that everything goes through unless grepexp ist set specifically
 
-rcfile="/tmp/mqc.$$"
-
 mosquitto_sub $mqtthost -v $topics "$noretained" $maxcount  "$@"   \
 | awk -b -v timeLen="$awkTimeLen" -v timeFormat="$awkTimeFormat" -v deltaTime="$awkDeltaTime" \
-      -v noCol="$noColor" -v additionalSkipLines="$awkAdditionalSkipLines" -e '
+      -v optimizeJSON="$awkOptimizeJSON" -v noCol="$noColor" -v additionalSkipLines="$awkAdditionalSkipLines" -e '
   BEGIN                   { # pngprefix=sprintf("%c%c%c%c%c%c%c%c", 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
                             pngprefix=sprintf("%c%c%c%c%c", 0x89, 0x50, 0x4E, 0x47, 0x0D) # workaround because of line split
                             jpgprefix=sprintf("%c%c%c",   0xFF, 0xD8, 0xFF)       # shortened workaround for JPEG/JFIF
-                            t=systime() }
-  /^[.)(a-z\/A-Z0-9$&%;_+-]{2,200} /  { # topics are assumed to have a certain length (2-200), reduces garbage
+                            t=systime() 
+                            mintopicsize=3}
+  /^[.)(a-z\/A-Z0-9$&%;_+-]{1,300} /  { # topics are assumed to have a certain length (2-200), reduces garbage
+                            isJson=0
                             match($0, /^[.)(a-z\/A-Z0-9$&%;_+-]+/)
-                            limitpos=RLENGTH+1
-                            topic=substr($0, 1, limitpos-1)
-                            message=substr($0, limitpos+1, 9999)
-                
-                            imagefound= match(message, "^" pngprefix ) ? "PNG" : ( match(message, "^" jpgprefix ) ? "JPEG" : "" )
+                            topiclength=RLENGTH
+                            # if ( (imagedata != "") && ( topiclength<5 || firstslashpos>topiclength || topiclength==length($0)+1) ) { 
+                            topic=substr($0, 1, topiclength)
+                            firstslashpos=index(topic, "/")
+                            if (match(topic, /[^[:print:]]/)>0 || (imagedata != "" && firstslashpos==0 && topiclength<6) ) {
+                                message=substr($0, topiclength+2, 40) "..."
+                                topic="..skipping..." topic 
+                            } else {
+                                message=substr($0, topiclength+2, 9999)
+                                imagedata=match(message, "^" pngprefix ) ? "PNG" : ( match(message, "^" jpgprefix ) ? "JPEG" : "" )
+                                isJson=( index(message, "{" ) == 1 )
+                            }
                             # clean message before printing:
                             gsub( /[^[:print:]]/ , "", topic )
                             gsub( /[^[:print:]]/ , "", message )
-                            # print imagefound "##" limitpos "##" topic "##"message"##"
+                            # print imagedata "##" limitpos "##" topic "##"message"##"
                             timestr = "00000000000000" strftime(timeFormat, systime() - (deltaTime ? t  : 0) ) ;
                             timestr = substr( timestr, length(timestr)-timeLen +1)
-                            if ( imagefound != "" ) {
-                                message="<BINARY FORMAT: " imagefound ">"
+                            if ( imagedata != "" ) {
+                                message="<BINARY FORMAT: " imagedata ">"
                             }
                             if ( noCol == "yes" ) {
                                 printf "%s %s  %s\n",  timestr , topic, message
                             } else {
-                                printf "%s %s %s\n" , "XXshouldbeTimeXX" timestr, gensub( "^[.)(/a-zA-Z0-9$&%;_+-]*", "\\0XXEndOfTopicXX", 1 , topic), message 
+                                printf "%s %s %s\n" , "XXshouldbeTimeXX" timestr, gensub( "^[.)(/a-zA-Z0-9$&%;_+-]*", "\\0XXEndOfTopicXX", 1 , topic), message
                                 # "\033[0;31m" $0 "\033[0m"
                             }
                             fflush()
                             next
                         } 
                         { # print printable characters of all other lines, but skip the binary data of images:
-                          if ( (imagefound == "") && ! ( additionalSkipLines == "1" ) ) {
+                          if ( (imagedata == "") && ! ( additionalSkipLines == "1" ) ) {
                            gsub( /[^[:print:]]/ , "", $0 )
                            printf "%s \n", $0
                            fflush() 
