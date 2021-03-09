@@ -15,7 +15,8 @@ These features ease MQTT debugging on the command line quite a bit as you can se
 4. Coloring is optional - use option -n to avoid it.
 5. Wellknown binary data (e.g. JPG, PNG) is replaced by a appropiate marker.
 6. If you prefer a time stamp instead of the wallclock time, use option -s
-7. The options -t , -T and -c are passed to mosquitto_sub.
+7. The options -t , -T and -c are passed on to mosquitto_sub.
+8. This script is less useful and would be more simply for newer versions of mosquitto_sub, since newer versions support the option "-F" for formatting the output, e.g. as JSON...
 
 ### Examples
 
@@ -29,10 +30,12 @@ mqtt-grep-color
 #### Example 2
 
 This command show the usage with optional parameters such as the the _grep-expression_, the _MQTT topic_ and and the _MQTT broker_:
+
 ```sh
 # follow any BBC subtitle stream, grep for lines with the's only and highlight them (dosn't make much sense but shows the capabilities)
 mqtt-grep-color -e the -t "bbc/#"  -h test.mosquitto.org
 ```
+
 This results in output  like this (assuning the BBC newsfeed is still running):
 
 ![Sample output from mqtt-grep-color with a grep option](sample_bbc24_with_the.png?raw=true "Sample output with grep expression")
