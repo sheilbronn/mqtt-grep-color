@@ -39,10 +39,11 @@ else
 fi
 
 command -v mosquitto_sub > /dev/null || { echo "$0: Error: Install mosquitto_sub first, e.g. from package mosquitto-client-nossl" 1>&2 ; exit 1 ;  }
+command -v gawk > /dev/null || { echo "$0: Error: Install gawk first, e.g. from package gawk" 1>&2 ; exit 1 ;  }
 
-mqtthost="-v"     # use "-v" to make sure mqtthost is not an empty option
-noretained="-v"     # use "-v" to make sure mqtthost is not an empty option
-maxcount="-v"     # use "-v" to make sure mqtthost is not an empty option
+mqtthost="-v"     # use "-v" to make sure $mqtthost   is not an empty option
+noretained="-v"   # use "-v" to make sure $noretained is not an empty option
+maxcount="-v"     # use "-v" to make sure $maxcount   is not an empty option
 awkTimeFormat="%M:%S"
 awkTimeLen=5            # for "mm:ss"
 awkDeltaTime=0            # default
@@ -368,10 +369,11 @@ gsub(/\"xy_val_tpl\" *:/,         "\"xy_value_template\":", message)
 | if [ -z "$noColor" ] ; then
       GREP_COLOR="$red"    $stdbufcmd  grep $GREPOPTS -E -e "^" -e '[.)(/a-zA-Z0-9$&%;_+-]+XXEndOfTopicXX'    \
     | GREP_COLOR="$magenta" $stdbufcmd  grep $GREPOPTS -E -e "^" -e '/\$[a-z]+XXEndOfTopicXX'    \
+    | GREP_COLOR="$magenta" $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'homeassistant/[.)(/a-zA-Z0-9$&%;_+-]+XXEndOfTopicXX'    \
     | GREP_COLOR="$yellow" $stdbufcmd  grep $GREPOPTS -E -e "^" -e '^XXshouldbeTimeXX[0-9:]+'   \
     | GREP_COLOR="$green"  $stdbufcmd  grep $GREPOPTS -E -e "$grepexp"      \
     | GREP_COLOR="$blue"   $stdbufcmd  grep $GREPOPTS -E -e "^" -e ","        \
-    | GREP_COLOR="$grey"   $stdbufcmd  grep $GREPOPTS -E -e "^" -e ',"[a-zA-Z0-9_]":'        \
+    | GREP_COLOR="$yellow"   $stdbufcmd  grep $GREPOPTS -E -e "^" -e ', *"[a-zA-Z0-9_]*":'        \
     | GREP_COLOR="$white"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e ':"[a-zA-Z0-9 )(./_%:-]*"'        \
     | awk -- '{ gsub( "XXshouldbeTimeXX|XXEndOfTopicXX" , "" ); print  }'  \
     ;
