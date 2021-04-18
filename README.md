@@ -1,11 +1,11 @@
 # mqtt-grep-color
 
-**mqtt-grep-color** is a shell script that **subscribes** to a MQTT topic using mosquitto_sub, adds a **time stamp** in front of each line, optionally **greps** for an expression plus **colors** the output. 
+**mqtt-grep-color**  **subscribes** to a MQTT topic using mosquitto_sub, adds a **time stamp** in front of each line, optionally **greps** for an expression plus **colors** the output. 
 These features ease MQTT debugging on the command line quite a bit as you can see from the screenshots.
 
 ### Usage
 ```sh
-  mqtt-grep-color -e <grepexpr> -h <brokerhost> -d -s -C <maxcount> -t <MQTT topic 1> -t <MQTT topic 2> -T <MQTT topic 1> -s -n
+  mqtt-grep-color -e <grepexpr> -h <brokerhost> -d -s -C <maxcount> -t <MQTT topic 1> -t <MQTT topic 2> -T <MQTT topic 1> -s -n -o
 ```
 
 ### Notes
@@ -13,10 +13,12 @@ These features ease MQTT debugging on the command line quite a bit as you can se
 2. **Non-printable characters** are removed from the mosquitto_sub output before further processing.
 3. If you have a BusyBox grep that doesn't support line buffering, try to install the command stdbuf, i.e. package "coreutils-stdbuf" on OpenWrt. Otherwise, ugly, bulky,delayed output might be the consequence.... (the script warns about this)
 4. Coloring is optional - use option -n to avoid it.
-5. Wellknown binary data (e.g. JPG, PNG) is replaced by a appropiate marker.
+5. Wellknown binary data (e.g. JPG, PNG) is replaced by an appropiate marker.
 6. If you prefer a time stamp instead of the wallclock time, use option -s
-7. The options -t , -T and -c are passed on to mosquitto_sub.
-8. This script is less useful and would be more simply for newer versions of mosquitto_sub, since newer versions support the option "-F" for formatting the output, e.g. as JSON...
+7. To optimize JSON messages, use the option -o: 
+    This will expand abbreviated keys in [Home Assistant MQTT discovery](https://www.home-assistant.io/docs/mqtt/discovery) announcements and also eliminate a redundant "Time" attribute.
+8. The options -t , -T and -c are passed on to mosquitto_sub.
+9. This script might be considered less useful and also would be more simply for newer versions of mosquitto_sub, since newer versions support the option "-F" for formatting the output, e.g. as JSON...
 
 ### Examples
 
