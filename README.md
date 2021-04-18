@@ -31,6 +31,16 @@ mqtt-grep-color
 
 #### Example 2
 
+```sh
+# connect to the default (=localhost) broker and show colored JSON messages, e.g. related to MQTT home automation
+mqtt-grep-color -o
+```
+This command results in output like this:
+
+![sample output from mqtt-grep-color -o](example2.png?raw=true "Sample output from mqtt-grep-color -o")
+
+#### Example 3
+
 This command show the usage with optional parameters such as the the _grep-expression_, the _MQTT topic_ and and the _MQTT broker_:
 
 ```sh
@@ -42,7 +52,7 @@ This results in output  like this (assuning the BBC newsfeed is still running):
 
 ![Sample output from mqtt-grep-color with a grep option](sample_bbc24_with_the.png?raw=true "Sample output with grep expression")
 
-#### Example 3
+#### Example 4
 
 ```sh
 # follow BBC News 24 compacted subtitle stream for max 50 lines
