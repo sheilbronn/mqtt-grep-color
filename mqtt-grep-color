@@ -165,7 +165,8 @@ mosquitto_sub $_ms_options   \
                             if ( verbose ) { print "MESSAGE(" isJsonCurly "," optimizeJSON "): " message } ## FIXME
                             if ( isJsonCurly && optimizeJSON ) {
                                 message=gensub(/\"Time\" *:\"[0-9T:-]*\"\,/, "", 1, message)  # eliminate the first "Time" key/value but only if followed by comma
-                                message=gensub(/\" *:([0-9.]+)/, "\":XXshouldbeNumberXX\\1XXEndOfNumberXX", "g", message)  # eliminate the "Time" key/value but only if followed by comma
+                                message=gensub(/\" *:([0-9.-]+)([, }]+)/, "\":XXshouldbeValueXX\\1XXEndOfValueXX\\2", "g", message)  # highlight a numeric value in JSON
+                                message=gensub(/\" *:\"([^\"]+)\"([, }]+)/, "\":\"XXshouldbeValueXX\\1XXEndOfValueXX\"\\2", "g", message)  # highlight a quoted string value in JSON
 gsub(/\"act_t\" *:/,             "\"action_topic\":", message)
 gsub(/\"act_tpl\" *:/,           "\"action_template\":", message)
 gsub(/\"atype\" *:/,             "\"automation_type\":", message)
@@ -378,9 +379,8 @@ gsub(/\"xy_val_tpl\" *:/,         "\"xy_value_template\":", message)
     | GREP_COLOR="$yellow" $stdbufcmd  grep $GREPOPTS -E -e "^" -e '^XXshouldbeTimeXX[0-9:]+'   \
     | GREP_COLOR="$green"  $stdbufcmd  grep $GREPOPTS -E -e "$grepexp"      \
     | GREP_COLOR="$blue"   $stdbufcmd  grep $GREPOPTS -E -e "^" -e ","        \
-    | GREP_COLOR="$yellow"   $stdbufcmd  grep $GREPOPTS -E -e "^" -e ', *"[a-zA-Z0-9_]*":'        \
-    | GREP_COLOR="$white"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e ':"[a-zA-Z0-9 )(./_%:-]*"' -e 'XXshouldbeNumberXX[0-9.]+XXEndOfNumberXX'       \
-    | awk -- '{ gsub( "XXshouldbeTimeXX|XXEndOfTopicXX" , "" ); gsub( "XXshouldbeNumberXX|XXEndOfNumberXX" , "" ); print  }'  \
+    | GREP_COLOR="$white"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXshouldbeValueXX[^"]*XXEndOfValueXX'       \
+    | awk -- '{ gsub( "XXshouldbeTimeXX|XXEndOfTopicXX" , "" ); gsub( "XXshouldbeValueXX|XXEndOfValueXX" , "" ); print  }'  \
     ;
 else
     cat 
