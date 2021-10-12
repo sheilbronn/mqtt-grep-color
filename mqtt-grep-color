@@ -19,7 +19,7 @@ stdbufcmd=""
 stdbufcmd_tr=$( command -v stdbuf ) && stdbufcmd_tr="$stdbufcmd_tr --output=L" # use stdbuf for tr if it is available
 
 # color definitions from https://askubuntu.com/questions/1042234/modifying-the-color-of-grep :
-grey="01;30"; red="01;31"; green="01;32"; yellow="01;33"; blue="01;34" ; magenta="01;35" ; cyan="01;36" ; white="01;37"
+grey="01;30"; red="01;31"; green="01;32"; yellow="01;33"; brightyellow="01;93"; blue="01;34" ; magenta="01;35" ; cyan="01;36" ; white="01;37"
 
 # other settings for BusyBox grep - since it cannot colorize. And the option line-buffered is also missing.
 { grep --help 2>&1 | grep -q BusyBox ; } && BUSYBOX="yes" && stdbufcmd="$stdbufcmd_tr" # ... and stdbuf also for grep if on BusyBox
@@ -376,7 +376,7 @@ gsub(/\"xy_val_tpl\" *:/,         "\"xy_value_template\":", message)
       GREP_COLOR="$red"    $stdbufcmd  grep $GREPOPTS -E -e "^" -e '[.)(/a-zA-Z0-9$&%;_+-]+XXEndOfTopicXX'    \
     | GREP_COLOR="$magenta" $stdbufcmd  grep $GREPOPTS -E -e "^" -e '/\$[a-z]+XXEndOfTopicXX'    \
     | GREP_COLOR="$magenta" $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'homeassistant/[.)(/a-zA-Z0-9$&%;_+-]+XXEndOfTopicXX'    \
-    | GREP_COLOR="$yellow" $stdbufcmd  grep $GREPOPTS -E -e "^" -e '^XXshouldbeTimeXX[0-9:]+'   \
+    | GREP_COLOR="$brightyellow" $stdbufcmd  grep $GREPOPTS -E -e "^" -e '^XXshouldbeTimeXX[0-9:]+'   \
     | GREP_COLOR="$green"  $stdbufcmd  grep $GREPOPTS -E -e "$grepexp"      \
     | GREP_COLOR="$blue"   $stdbufcmd  grep $GREPOPTS -E -e "^" -e ","        \
     | GREP_COLOR="$white"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXshouldbeValueXX[^"]*XXEndOfValueXX'       \
