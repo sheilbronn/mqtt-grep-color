@@ -69,9 +69,10 @@ do
             test)    mqtthost="test.mosquitto.org" ;;
             eclipse) mqtthost="mqtt.eclipseprojects.io"   ;;
             hivemq)  mqtthost="broker.hivemq.com"  ;;
+            emqx)	mqtthost="broker.emqx.io"   ;;
     		dash)  mqtthost="broker.mqttdashboard.com"    ;; # https://moxd.io/2015/10/17/public-mqtt-brokers/
             *)       mqtthost="$( echo $mqtthost | remove_unwanted_chars )" ;; # clean up for sec purposes
-            esac
+		esac
         ;;
     t)  topics="$topics -t $( echo "$OPTARG" | sed -e 's:/$:/\#:' )" # as a service add \# to any trailing /
         ;;
