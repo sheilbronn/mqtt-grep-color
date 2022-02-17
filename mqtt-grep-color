@@ -127,7 +127,7 @@ _ms_options="${mqtthost:+-h $mqtthost} -v $topics $noretained $maxcount  $*"
 [ "$bVerbose" ] && echo "$scriptname: m_s options: $_ms_options" 1>&2
 mosquitto_sub $_ms_options   \
 | gawk -b -v timeLen="$awkTimeLen" -v timeFormat="$awkTimeFormat" -v deltaTime="$awkDeltaTime" -v verbose="$bVerbose" \
-      -v optimizeJSON="$awkOptimizeJSON" -v noCol="$noColor" -v additionalSkipLines="$awkAdditionalSkipLines"  '
+      -v optimizeJSON="$awkOptimizeJSON" -v noColor="$noColor" -v additionalSkipLines="$awkAdditionalSkipLines"  '
   BEGIN                   { jqcmd="jq ."  ; # jqcmd="cat"
                             # PROCINFO[jqcmd, "READ_TIMEOUT"] = 1000
                             PROCINFO[jqcmd, "RETRY"] = 1
@@ -136,9 +136,9 @@ mosquitto_sub $_ms_options   \
                             jpgprefix=sprintf("%c%c%c",   0xFF, 0xD8, 0xFF)       # shortened workaround for JPEG/JFIF
                             t=systime() 
                             mintopicsize=3}
-  /^$/                    { next } # skip empty lines
+  /^$/                    { next } # skip any empty line
   /^[.)(a-z\/A-Z0-9$&%;_+-]{1,300} /  { # topics are assumed to have a certain length (2-200), reduces garbage
-                            if ( isJsonCurly && collectedMessage && noCol == "yes" ) { 
+                            if ( isJson && collectedMessage && noColor == "yes" ) { 
                                 print "*****" ; fflush() ;
                                 print collectedMessage | jqcmd # | getline beauty ; print beauty ; 
                                 system("sleep 1") ;
@@ -147,7 +147,7 @@ mosquitto_sub $_ms_options   \
                                 print "*****"
                                 ; fflush() ;
                             }
-                            isJsonCurly=0
+                            isJson=0
                             match($0, /^[.)(a-z\/A-Z0-9$&%;_+-]+/)
                             topiclength=RLENGTH
                             # if ( (imagedatatype != "") && ( topiclength<5 || firstslashpos>topiclength || topiclength==length($0)+1) ) { 
@@ -160,15 +160,15 @@ mosquitto_sub $_ms_options   \
                              } else {
                                 message=substr($0, topiclength+2, 9999)
                                 imagedatatype=match(message, "^" pngprefix ) ? "PNG" : ( match(message, "^" jpgprefix ) ? "JPEG" : "" )
-                                isJsonCurly=( index(message, "{" ) == 1 )
+                                isJson=( index(message, "{" ) == 1 )
                                 collectedMessage=message
                             }
                             # clean message (=remove non-printables) before printing:
                             gsub( /[^[:print:]]/ , "", topic )
                             gsub( /[^[:print:]]/ , "", message )
-                            if ( verbose ) { print "MESSAGE(" isJsonCurly "," optimizeJSON "): " message } ## FIXME
-                            if ( isJsonCurly && optimizeJSON ) {
-                                message=gensub( /\"Time\" *:\"[0-9T:-]*\",/, "",                            1, message)  # eliminate the first "Time" key/value but only if followed by comma
+                            if ( verbose ) { print "MESSAGE(" isJson "," optimizeJSON "): " message } ## FIXME
+                            if ( isJson && optimizeJSON ) {
+                                message=gensub( /\"Time\" *:\"[0-9T:-]*\",/, "",   1, message)  # eliminate the first "Time" key/value but only if followed by comma
                                 message=gensub( /\"([a-zA-Z _]+)\" *: *(\[?){/     , "\"XXyellowXX\\1XXyellowXX\":\\2{",        "g", message)  # highlight the name of a whole embedded object, e.g. device
                                message=gensub( /\" *:"([^\"]+)\"([, }]+)/ , "\":\"XXwhiteValueXX\\1XXwhiteValueXX\"\\2", "g", message)  # highlight a quoted string value in JSON
 gsub(/\"act_t\" *:/,             "\"action_topic\":", message)
@@ -352,6 +352,9 @@ gsub(/\"whit_val_tpl\" *:/,       "\"white_value_template\":", message)
 gsub(/\"xy_cmd_t\" *:/,           "\"xy_command_topic\":", message)
 gsub(/\"xy_stat_t\" *:/,          "\"xy_state_topic\":", message)
 gsub(/\"xy_val_tpl\" *:/,         "\"xy_value_template\":", message)
+                            } else {
+                                # works but output not pretty:
+                                # message=gensub( /^([[:alnum:]]+)$/ , "XXwhiteValueXX\\1XXwhiteValueXX", 1, message)  # highlight a simple (one-word) string
                             }
                             # print imagedatatype "##" limitpos "##" topic "##"message"##"
                             timestr = "00000000000000" strftime(timeFormat, systime() - (deltaTime ? t  : 0) ) ;
@@ -359,7 +362,7 @@ gsub(/\"xy_val_tpl\" *:/,         "\"xy_value_template\":", message)
                             if ( imagedatatype != "" ) {
                                 message="<BINARY FORMAT: " imagedatatype ">"
                             }
-                            if ( noCol == "yes" ) {
+                            if ( noColor == "yes" ) {
                                 printf "%s %s  %s\n", timestr , topic, message
                             } else {
                                 printf "%s %s %s\n" , "XXshouldbeTimeXX" timestr, gensub( "^[.)(/a-zA-Z0-9$&%;_+-]*", "\\0XXEndOfTopicXX", 1 , topic), message
@@ -372,7 +375,7 @@ gsub(/\"xy_val_tpl\" *:/,         "\"xy_value_template\":", message)
                           if ( (imagedatatype == "") && ! ( additionalSkipLines == "1" ) ) {
                             gsub( /[^[:print:]]/ , "", $0 )
                             printf "%s \n", $0
-                            if (isJsonCurly) { collectedMessage=collectedMessage " " $0 }   
+                            if (isJson) { collectedMessage=collectedMessage " " $0 }   
                             fflush() 
                           }
                         } '    \
