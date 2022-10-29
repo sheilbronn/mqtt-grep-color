@@ -51,21 +51,21 @@ scriptname="${0##*/}"
 jsonppcmd="cat"
 
 remove_unwanted_chars() {
-     tr -d '()"^%$ \r\000-\011\013-\037' "$@"
+     tr -d '()"^%$ \r\000-\011\013-\037'
 }
 
 ### process command line options ###
 
-while getopts "?e:h:t:T:Rl:C:Ssconpxv-" opt      
+while getopts "?e:h:t:T:p:Rl:C:SsconPxv-" opt      
 do
     case "$opt" in
-    \?) echo "Usage: $scriptname -e expr -h host -x -v -t topic1 -t topic2 -o -C maxcnt  --  othermosquittoopts" 1>&2
+    \?) echo "Usage: $scriptname -e expr -h host -x -v -t topic1 -t topic2 -o -C maxcnt -p port -P  --  othermosquittoopts" 1>&2
         exit 1
         ;;
     e)  grepexp="$OPTARG"
 		;;
-    h)  mqtthost="$OPTARG"  # configure broker host here or in $HOME/.config/mosquitto_sub
-        case "$mqtthost" in # http://www.steves-internet-guide.com/mqtt-hosting-brokers-and-servers/
+    h)  # configure broker host here or in $HOME/.config/mosquitto_sub
+        case "$OPTARG" in # http://www.steves-internet-guide.com/mqtt-hosting-brokers-and-servers/
             test)    mqtthost="test.mosquitto.org" ;;
             eclipse) mqtthost="mqtt.eclipseprojects.io"   ;;
             hivemq)  mqtthost="broker.hivemq.com"  ;;
@@ -78,9 +78,11 @@ do
         ;;
     T)  topics="$topics -T $( echo "$OPTARG" | sed -e 's:/$:/\#:' )"
         ;;
+    p)  port="$OPTARG"
+        ;;
     R)  noretained="-R"
         ;;
-    l)  maxchars="$( echo "$OPTARG" | remove_unwanted_chars )"
+    l)  awkMinTopicChars="$( echo "$OPTARG" | remove_unwanted_chars )"
         ;;
     C)  maxcount="-C $( echo "$OPTARG" | remove_unwanted_chars )" # clean up for sec purposes
         ;;
@@ -88,7 +90,7 @@ do
         ;;
     c)  awkAdditionalSkipLines="1"
         ;;  
-    p)  if command -v json_pp ; then
+    P)  if command -v json_pp ; then
             jsonppcmd=json_pp
         else
             echo "$scriptname: Warning: json_pp not found..." 1>&2
@@ -116,18 +118,19 @@ shift "$((OPTIND-1))"   # Discard options processed by getopts, any remaining op
 
 [ -z "$topics" ] && topics="-t #"         # use '#' as MQTT topic if nothing else given
 
-# These are the following four steps for processing the MQTT stream: 
-# 0. remove any non-printable stuff, 
-# 1. color the MQTT topic red,
-# 2. put the time in front and color it yellow, 3. color the optional grep expression or curly brackets etc by default.
+# These are the following steps for processing the MQTT stream: 
+# 1. remove any non-printable stuff from the data, 
+# 2. color the MQTT topic red,
+# 3. put the time in front and color it yellow, 
+# 4. color the optional grep expression or curly brackets etc by default.
 # N.B. the very ugly hack with XXendofredXX is used to mark a typical MQTT topic for further grepping!
-# N.B. a space at the end of the line makes sure that everything goes through unless grepexp ist set specifically
+# N.B. a space at the end of the line makes sure that everything goes through, unless grepexp ist set specifically.
 
-_ms_options="${mqtthost:+-h $mqtthost} -v $topics $noretained $maxcount  $*"
+_ms_options="${mqtthost:+-h $mqtthost} ${port:+-p $port} -v $topics $noretained $maxcount  $*"
 [ "$bVerbose" ] && echo "$scriptname: m_s options: $_ms_options" 1>&2
 mosquitto_sub $_ms_options   \
 | gawk -b -v timeLen="$awkTimeLen" -v timeFormat="$awkTimeFormat" -v deltaTime="$awkDeltaTime" -v verbose="$bVerbose" \
-      -v optimizeJSON="$awkOptimizeJSON" -v noColor="$noColor" -v additionalSkipLines="$awkAdditionalSkipLines"  '
+      -v optimizeJSON="$awkOptimizeJSON" -v noColor="$noColor" -v additionalSkipLines="$awkAdditionalSkipLines" -v minTopicChars="${awkMinTopicChars:-1}" '
 BEGIN               {   jqcmd="jq ."  ; # jqcmd="cat"
                         # PROCINFO[jqcmd, "READ_TIMEOUT"] = 1000
                         PROCINFO[jqcmd, "RETRY"] = 1
@@ -138,6 +141,7 @@ BEGIN               {   jqcmd="jq ."  ; # jqcmd="cat"
                         mintopicsize=3
                         }
 /^$/                {   next } # skip any empty line
+
 function compare(s1, s2) {
     l= length(s1) > length(s2) ? length(s1) : length(s2)
     for (i=1; i<=l && substr(s1,i,1) == substr(s2,i,1) ; i++)  { }
@@ -145,7 +149,7 @@ function compare(s1, s2) {
     return i-1
 }
 
-/^[.)(a-z\/A-Z0-9$&%;_+-]{1,300} /  { # topics are assumed to have a certain length (2-200), reduces garbage
+/^[.)(a-z\/A-Z0-9$&%;_+-]{1,300} /  { # topics are assumed to have only a certain length: 1-300, reduces garbage
                         if ( isJson && collectedMessage && noColor == "yes" ) { 
                             print "*****" ; fflush() ;
                             print collectedMessage | jqcmd # | getline beauty ; print beauty ; 
@@ -159,7 +163,7 @@ function compare(s1, s2) {
                         match($0, /^[.)(a-z\/A-Z0-9$&%;_+-]+/)
                         topiclength=RLENGTH
                         # if ( (imagedatatype != "") && ( topiclength<5 || firstslashpos>topiclength || topiclength==length($0)+1) ) { 
-                        topic=substr($0, 1, topiclength)
+                        topic=sprintf("%-*.*s", minTopicChars, topiclength, $0) # extract the topic, padding it with spaces up to minTopicChars for easier reading 
                         firstslashpos=index(topic, "/")
                         if (match(topic, /[^[:print:]]/)>0 || (imagedatatype != "" && firstslashpos==0 && topiclength<6) ) {
                             message=substr($0, topiclength+2, 40) "..."
