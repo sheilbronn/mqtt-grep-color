@@ -5,7 +5,7 @@ These features ease MQTT debugging on the command line quite a bit as you can se
 
 ### Usage
 ```sh
-  mqtt-grep-color -e <grepexpr> -h <brokerhost> -d -s -C <maxcount> -t <MQTT topic 1> -t <MQTT topic 2> -T <MQTT topic 1> -s -n -o
+  mqtt-grep-color -e <grepexpr> -h <brokerhost> -p <port> -P -d -s -C <maxcount> -t <MQTT topic 1> -t <MQTT topic 2> -T <MQTT topic 1> -s -n -o
 ```
 
 ### Notes
