@@ -17,6 +17,7 @@ set -o noclobber  # disable for security reasons
 scriptname="${0##*/}"
 stdbufcmd=""
 stdbufcmd_tr=$( command -v stdbuf ) && stdbufcmd_tr="$stdbufcmd_tr --output=L" # use stdbuf for tr if it is available
+grepexp=""
 
 # color definitions from https://askubuntu.com/questions/1042234/modifying-the-color-of-grep :
 grey="01;30"; red="01;31"; green="01;32"; yellow="01;33"; iyellow="01;93"; blue="01;34" ; purple="01;35" ; cyan="01;36" ; white="01;37"
@@ -27,12 +28,12 @@ grey="01;30"; red="01;31"; green="01;32"; yellow="01;33"; iyellow="01;93"; blue=
 if [ "$BUSYBOX" ] 
 then
     # I'm on BusyBox
-    grepexp="^ *$|[\}{ ]|\[\]|\[\{|\}\]" # { must be escaped
+    ### grepexp="^ *$|[\}{ ]|\[\]|\[\{|\}\]" # { must be escaped
     # colorizes  }{, etc. if no other grep expression given; space must be there!
     [ "$stdbufcmd_tr" ] || echo "$scriptname: Warning: Install stdbuf for better line buffering! (Package coreutils-stdbuf on OpenWrt)" 1>&2
 else
     # Not on BusyBox
-    grepexp="^ *$|[\}{ ]|\[\]|\[{|\}\]"  # { must NOT be escaped
+    ### grepexp="^ *$|[\}{ ]|\[\]|\[{|\}\]"  # { must NOT be escaped
     # grepexp="$grepexp| PNG"
     GREPOPTS="--text --color=always --line-buffered"
     [ "$stdbufcmd_tr" ] || echo "$scriptname: Warning: Install stdbuf for better line buffering!" 1>&2
@@ -44,6 +45,7 @@ command -v gawk > /dev/null || { echo "$0: Error: Install gawk first, e.g. from 
 mqtthost=""    
 noretained="-v"   # use "-v" to make sure $noretained is not an empty option
 maxcount="-v"     # use "-v" to make sure $maxcount   is not an empty option
+messageTimeOut="-v" # use "-v" to make sure $messageTimeOut   is not an empty option
 awkTimeFormat="%H%M%S"
 awkTimeLen=6           # for "mm:ss"
 awkDeltaTime=0            # default
@@ -56,7 +58,7 @@ remove_unwanted_chars() {
 
 ### process command line options ###
 
-while getopts "?e:h:t:T:p:Rl:C:SsconPxv-" opt      
+while getopts "?e:h:t:T:f:p:W:Rl:C:SsconPxv-" opt      
 do
     case "$opt" in
     \?) echo "Usage: $scriptname -e expr -h host -x -v -t topic1 -t topic2 -o -C maxcnt -p port -P  --  othermosquittoopts" 1>&2
@@ -64,25 +66,29 @@ do
         ;;
     e)  grepexp="$OPTARG"
 		;;
-    h)  # configure broker host here or in $HOME/.config/mosquitto_sub
-        case "$OPTARG" in # http://www.steves-internet-guide.com/mqtt-hosting-brokers-and-servers/
-            test)    mqtthost="test.mosquitto.org" ;;
-            eclipse) mqtthost="mqtt.eclipseprojects.io"   ;;
-            hivemq)  mqtthost="broker.hivemq.com"  ;;
+    h)  # set the MQTT broker host here or in $HOME/.config/mosquitto_sub
+        case "$OPTARG" in     # see http://www.steves-internet-guide.com/mqtt-hosting-brokers-and-servers/
+            test)   mqtthost="test.mosquitto.org" ;;
+            eclipse) mqtthost="mqtt.eclipseprojects.io"  ;;
+            hivemq) mqtthost="broker.hivemq.com"  ;;
             emqx)	mqtthost="broker.emqx.io"   ;;
-    		dash)  mqtthost="broker.mqttdashboard.com"    ;; # https://moxd.io/2015/10/17/public-mqtt-brokers/
-            *)       mqtthost="$( echo $mqtthost | remove_unwanted_chars )" ;; # clean up for sec purposes
+    		dash)   mqtthost="broker.mqttdashboard.com"    ;; # https://moxd.io/2015/10/17/public-mqtt-brokers/
+            *)      mqtthost="$( echo "$OPTARG" | remove_unwanted_chars )" ;; # clean up for sec purposes
 		esac
         ;;
-    t)  topics="$topics -t $( echo "$OPTARG" | sed -e 's:/$:/\#:' )" # as a service add \# to any trailing /
+    t)  topics="$topics -t $( echo "$OPTARG" | sed -e 's:/$:/\#:' )" # as a service, add \# to any trailing /
         ;;
     T)  topics="$topics -T $( echo "$OPTARG" | sed -e 's:/$:/\#:' )"
         ;;
+    f)  inputfile="$OPTARG"
+        ;;
     p)  port="$OPTARG"
+        ;;
+    W)  messageTimeOut="-W $OPTARG"
         ;;
     R)  noretained="-R"
         ;;
-    l)  awkMinTopicChars="$( echo "$OPTARG" | remove_unwanted_chars )"
+    l)  awkMinTopicChars="$( echo "$OPTARG" | remove_unwanted_chars )" # minimum length of outputted topic string (padded with spaces)
         ;;
     C)  maxcount="-C $( echo "$OPTARG" | remove_unwanted_chars )" # clean up for sec purposes
         ;;
@@ -96,7 +102,7 @@ do
             echo "$scriptname: Warning: json_pp not found..." 1>&2
         fi
         ;;
-    s)  sSuppressAttrs="$sSuppressAttrs ${OPTARG//[^a-zA-Z0-9_]}" # attrs that will be tried to be eliminated
+    s)  sSuppressAttrs="$sSuppressAttrs $( echo "$OPTARG" | tr -d -c "A-Za-z0-9_")" # attrs that will be tried to be eliminated
         ;;
     S)  awkTimeFormat="%s"
         awkTimeLen=3 # only the last three digits (len of %s is 11)
@@ -126,16 +132,23 @@ shift "$((OPTIND-1))"   # Discard options processed by getopts, any remaining op
 # N.B. the very ugly hack with XXendofredXX is used to mark a typical MQTT topic for further grepping!
 # N.B. a space at the end of the line makes sure that everything goes through, unless grepexp ist set specifically.
 
-_ms_options="${mqtthost:+-h $mqtthost} ${port:+-p $port} -v $topics $noretained $maxcount  $*"
-[ "$bVerbose" ] && echo "$scriptname: m_s options: $_ms_options" 1>&2
-mosquitto_sub $_ms_options   \
-| gawk -b -v timeLen="$awkTimeLen" -v timeFormat="$awkTimeFormat" -v deltaTime="$awkDeltaTime" -v verbose="$bVerbose" \
+{
+    if [ x"$inputfile" = x- ] ; then
+        cat
+    elif [ -n "$inputfile" ] ; then
+        cat "$inputfile"
+    else   
+        _ms_options="${mqtthost:+-h $mqtthost} ${port:+-p $port} -v $topics $noretained $maxcount $messageTimeOut $*"
+        [ "$bVerbose" ] && echo "$scriptname: m_s options: $_ms_options" 1>&2
+        mosquitto_sub $_ms_options
+    fi
+} | gawk -b -v timeLen="$awkTimeLen" -v timeFormat="$awkTimeFormat" -v deltaTime="$awkDeltaTime" -v verbose="$bVerbose" \
       -v optimizeJSON="$awkOptimizeJSON" -v noColor="$noColor" -v additionalSkipLines="$awkAdditionalSkipLines" -v minTopicChars="${awkMinTopicChars:-1}" '
 BEGIN               {   jqcmd="jq ."  ; # jqcmd="cat"
                         # PROCINFO[jqcmd, "READ_TIMEOUT"] = 1000
                         PROCINFO[jqcmd, "RETRY"] = 1
                         # pngprefix=sprintf("%c%c%c%c%c%c%c%c", 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
-                        pngprefix=sprintf("%c%c%c%c%c", 0x89, 0x50, 0x4E, 0x47, 0x0D) # reduced bytes as a workaround because of line split
+                        pngprefix=sprintf("%c%c%c%c%c", 0x89, 0x50, 0x4E, 0x47, 0x0D) # reduced number of signature bytes as a workaround because of line split
                         jpgprefix=sprintf("%c%c%c",   0xFF, 0xD8, 0xFF)       # shortened workaround for JPEG/JFIF
                         t=systime() 
                         mintopicsize=3
@@ -145,11 +158,11 @@ BEGIN               {   jqcmd="jq ."  ; # jqcmd="cat"
 function compare(s1, s2) {
     l= length(s1) > length(s2) ? length(s1) : length(s2)
     for (i=1; i<=l && substr(s1,i,1) == substr(s2,i,1) ; i++)  { }
-    print i
+    # print i
     return i-1
 }
 
-/^[.)(a-z\/A-Z0-9$&%;_+-]{1,300} /  { # topics are assumed to have only a certain length: 1-300, reduces garbage
+/^[.)(a-z\/A-Z0-9$&%;_+-]{1,300} /  { # topics are assumed to have only a certain length: 1-300, reduces amount of garbage
                         if ( isJson && collectedMessage && noColor == "yes" ) { 
                             print "*****" ; fflush() ;
                             print collectedMessage | jqcmd # | getline beauty ; print beauty ; 
@@ -172,7 +185,7 @@ function compare(s1, s2) {
                         } else {
                             message=substr($0, topiclength+2, 9999)
                             imagedatatype=match(message, "^" pngprefix ) ? "PNG" : ( match(message, "^" jpgprefix ) ? "JPEG" : "" )
-                            isJson=( index(message,"{") == 1 )
+                            isJson=( index(message,"{") == 1 || index(message,"[") == 1)  # FIXME: check for "]" at message end, too
                             collectedMessage=message
                         }
                         # clean message (=remove non-printables) before printing:
@@ -180,11 +193,17 @@ function compare(s1, s2) {
                         gsub( /[^[:print:]]/ , "", message )
                         if ( verbose ) { print "MESSAGE(" isJson "," optimizeJSON "): " message } ## FIXME
                         if ( isJson && optimizeJSON ) {
-                            message=gensub( /":([0-9])(, *")/,  "\": \\1\\2", "g", message)  # pad any one-digit number with one space for better alignment across messages
-                            message=gensub( /"Time" *:"[0-9T:-]*",/,   "", "g", message)  # eliminate the first "Time" key/value but only if followed by comma
-                            message=gensub( /"([a-zA-Z _]+)" *: *(\[?){/ , "\"XXcyanXX\\1XXcyanXX\":\\2{", "g", message)  # highlight the name of a whole embedded object, e.g. device
-                            message=gensub( /" *:"([^"]+)"([, }]+)/   , "\":\"XXwhiteXX\\1XXwhiteXX\"\\2", "g", message)  # highlight a quoted string value in JSON
-#                               message=gensub( /" *:([0-9.]+)([,}]+)/ , "\":\"XXwhiteXX\\1XXwhiteXX\"\\2", "g", message)  # highlight a quoted string value in JSON
+                            message=gensub( /" *: *"/                 , "\":\""     ,  "g", message)  # remove any spaces around the JSON colon for text values
+                            message=gensub( /" *:[ ]*(-*[0-9]*[.]*[0-9]*)/,  "\":\\1" ,  "g", message)  # remove any spaces around the JSON colon for numeric values
+                            message=gensub( /":([0-9])(, *")/             , "\": \\1\\2",  "g", message)  # pad any one-digit number with one space for better alignment across messages
+                            message=gensub( /"Time" *:"[0-9T:-]*",/       , ""          ,  "g", message)  # eliminate the first "Time" key/value but only if it is followed by a comma
+                            message=gensub( /"([a-zA-Z _]+)" *: *(\[?){/  , "\"XXcyanXX\\1XXcyanXX\":\\2{"    , "g", message)  # highlight the name of a whole embedded object, e.g. device
+
+                            message=gensub( /" *:( *)"([^"]+)"( *[,}]+)/  , "\":\\1\"XXwhiteXX\\2XXwhiteXX\"\\3" , "g", message)  # highlight a quoted string value in JSON
+                            message=gensub( /" *:( *)(null|-{0,1}([0-9]*[.]{0,1}[0-9]*))( *[,}]+)/   , "\":\\1XXwhiteXX\\2XXwhiteXX\\4 " , "g", message)  # highlight a numeric value in JSON
+                            message=gensub( / *,  *"/                                    , ", \"" , "g", message)  # reduce spaces around a comma to max one
+                            message=gensub( /([,{] *)"([^"]+)"/                        , "\\1XXnoneXX\\2XXnoneXX" , "g", message)  # make keys yellow and remove apostrophes
+
 gsub(/\"act_t\" *:/,             "\"action_topic\":", message)
 gsub(/\"act_tpl\" *:/,           "\"action_template\":", message)
 gsub(/\"atype\" *:/,             "\"automation_type\":", message)
@@ -401,12 +420,13 @@ gsub(/\"xy_val_tpl\" *:/,         "\"xy_value_template\":", message)
       GREP_COLOR="$red"     $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXbeginofredXX[.)(/a-zA-Z0-9$&%;_+-]+XXendofredXX'    \
     | GREP_COLOR="$purple"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXbeginofpurpleXXhomeassistant/[.)(/a-zA-Z0-9$&%;_+-]+XXendofpurpleXX'    \
     | GREP_COLOR="$purple"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e '\$[a-z]+XXendofredXX'    \
-    | GREP_COLOR="$yellow"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e '^XXcol1timeXX[0-9:]+XXcol1timeXX'   \
-    | GREP_COLOR="$green"   $stdbufcmd  grep $GREPOPTS -E        -e "$grepexp"      \
-    | GREP_COLOR="$blue"    $stdbufcmd  grep $GREPOPTS -E -e "^" -e ","        \
+    | GREP_COLOR="$yellow"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e '^XXcol1timeXX[0-9:]+XXcol1timeXX|XXyellowXX[^X]+XXyellowXX'   \
+    | { [ -z "$grepexp" ] && cat || GREP_COLOR="$green"   $stdbufcmd  grep $GREPOPTS -E        -e "$grepexp" ; }   \
+    | GREP_COLOR="$blue"    $stdbufcmd  grep $GREPOPTS -E -e "^" -e "nomorexxxxxxxx,"        \
+    | GREP_COLOR="$grey"    $stdbufcmd  grep $GREPOPTS -E -e "^" -e " \{|,|\}$"        \
     | GREP_COLOR="$white"   $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXwhiteXX[^X]+XXwhiteXX'       \
     | GREP_COLOR="$cyan"    $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXcyanXX[^:]+XXcyanXX'       \
-    | awk -- '{ gsub( "XXcol1timeXX|XXbeginofredXX|XXendofredXX|XXbeginofpurpleXX|XXendofpurpleXX|XXwhiteXX|XXcyanXX" , "" ); print }'  \
+    | awk -- '{ gsub( "XXcol1timeXX|XXbeginofredXX|XXendofredXX|XXbeginofpurpleXX|XXendofpurpleXX|XXwhiteXX|XXcyanXX|XXyellowXX|XXnoneXX" , "" ); print }' ; \
     ;
 else
     cat 
