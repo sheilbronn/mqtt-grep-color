@@ -25,7 +25,7 @@ grey="01;30"; red="01;31"; green="01;32"; yellow="01;33"; iyellow="01;93"; blue=
 # other settings for BusyBox grep - since it cannot colorize. And the option line-buffered is also missing.
 { grep --help 2>&1 | grep -q BusyBox ; } && BUSYBOX="yes" && stdbufcmd="$stdbufcmd_tr" # ... and stdbuf also for grep if on BusyBox
 
-if [ "$BUSYBOX" ] 
+if [ "$BUSYBOX" ]
 then
     # I'm on BusyBox
     ### grepexp="^ *$|[\}{ ]|\[\]|\[\{|\}\]" # { must be escaped
@@ -42,7 +42,7 @@ fi
 command -v mosquitto_sub > /dev/null || { echo "$0: Error: Install mosquitto_sub first, e.g. from package mosquitto-client-nossl" 1>&2 ; exit 1 ;  }
 command -v gawk > /dev/null || { echo "$0: Error: Install gawk first, e.g. from package gawk" 1>&2 ; exit 1 ;  }
 
-mqtthost=""    
+mqtthost=""
 noretained="-v"   # use "-v" to make sure $noretained is not an empty option
 maxcount="-v"     # use "-v" to make sure $maxcount   is not an empty option
 messageTimeOut="-v" # use "-v" to make sure $messageTimeOut   is not an empty option
@@ -58,7 +58,7 @@ remove_unwanted_chars() {
 
 ### process command line options ###
 
-while getopts "?e:h:t:T:f:p:W:Rl:C:SsconPxv-" opt      
+while getopts "?e:h:t:T:f:p:W:Rl:C:SsconPxv-" opt
 do
     case "$opt" in
     \?) echo "Usage: $scriptname -e expr -h host -x -v -t topic1 -t topic2 -o -C maxcnt -p port -P  --  othermosquittoopts" 1>&2
@@ -95,7 +95,7 @@ do
     n)  noColor="yes"
         ;;
     c)  awkAdditionalSkipLines="1"
-        ;;  
+        ;;
     P)  if command -v json_pp ; then
             jsonppcmd=json_pp
         else
@@ -124,25 +124,22 @@ shift "$((OPTIND-1))"   # Discard options processed by getopts, any remaining op
 
 [ -z "$topics" ] && topics="-t #"         # use '#' as MQTT topic if nothing else given
 
-# These are the following steps for processing the MQTT stream: 
-# 1. remove any non-printable stuff from the data, 
+# These are the following steps for processing the MQTT stream:
+# 1. remove any non-printable stuff from the data,
 # 2. color the MQTT topic red,
-# 3. put the time in front and color it yellow, 
+# 3. put the time in front and color it yellow,
 # 4. color the optional grep expression or curly brackets etc by default.
-# N.B. the very ugly hack with XXendofredXX is used to mark a typical MQTT topic for further grepping!
+# N.B. the ugly hack with XXendofredXX is used to mark a typical MQTT topic for further grepping!
 # N.B. a space at the end of the line makes sure that everything goes through, unless grepexp ist set specifically.
 
-{
-    if [ x"$inputfile" = x- ] ; then
-        cat
-    elif [ -n "$inputfile" ] ; then
-        cat "$inputfile"
-    else   
-        _ms_options="${mqtthost:+-h $mqtthost} ${port:+-p $port} -v $topics $noretained $maxcount $messageTimeOut $*"
-        [ "$bVerbose" ] && echo "$scriptname: m_s options: $_ms_options" 1>&2
-        mosquitto_sub $_ms_options
-    fi
-} | gawk -b -v timeLen="$awkTimeLen" -v timeFormat="$awkTimeFormat" -v deltaTime="$awkDeltaTime" -v verbose="$bVerbose" \
+if [ -n "$inputfile" ] ; then
+    cat "$inputfile"
+else
+    _ms_options="${mqtthost:+-h $mqtthost} ${port:+-p $port} -v $topics $noretained $maxcount $messageTimeOut $*"
+    [ "$bVerbose" ] && echo "$scriptname: m_s options: $_ms_options" 1>&2
+    mosquitto_sub $_ms_options
+fi |
+gawk -b -v timeLen="$awkTimeLen" -v timeFormat="$awkTimeFormat" -v deltaTime="$awkDeltaTime" -v verbose="$bVerbose" \
       -v optimizeJSON="$awkOptimizeJSON" -v noColor="$noColor" -v additionalSkipLines="$awkAdditionalSkipLines" -v minTopicChars="${awkMinTopicChars:-1}" '
 BEGIN               {   jqcmd="jq ."  ; # jqcmd="cat"
                         # PROCINFO[jqcmd, "READ_TIMEOUT"] = 1000
@@ -150,7 +147,7 @@ BEGIN               {   jqcmd="jq ."  ; # jqcmd="cat"
                         # pngprefix=sprintf("%c%c%c%c%c%c%c%c", 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
                         pngprefix=sprintf("%c%c%c%c%c", 0x89, 0x50, 0x4E, 0x47, 0x0D) # reduced number of signature bytes as a workaround because of line split
                         jpgprefix=sprintf("%c%c%c",   0xFF, 0xD8, 0xFF)       # shortened workaround for JPEG/JFIF
-                        t=systime() 
+                        t=systime()
                         mintopicsize=3
                         }
 /^$/                {   next } # skip any empty line
@@ -163,37 +160,38 @@ function compare(s1, s2) {
 }
 
 /^[.)(a-z\/A-Z0-9$&%;_+-]{1,300} /  { # topics are assumed to have only a certain length: 1-300, reduces amount of garbage
-                        if ( isJson && collectedMessage && noColor == "yes" ) { 
+                        if ( isJSON && collectedMessage && noColor == "yes" ) {
                             print "*****" ; fflush() ;
-                            print collectedMessage | jqcmd # | getline beauty ; print beauty ; 
+                            print collectedMessage | jqcmd # | getline beauty ; print beauty ;
                             system("sleep 1") ;
                             # ; fflush() ;
-                            # close(jqcmd) 
+                            # close(jqcmd)
                             print "*****"
                             ; fflush() ;
                         }
-                        isJson=0
+                        isJSON=0
                         match($0, /^[.)(a-z\/A-Z0-9$&%;_+-]+/)
                         topiclength=RLENGTH
-                        # if ( (imagedatatype != "") && ( topiclength<5 || firstslashpos>topiclength || topiclength==length($0)+1) ) { 
-                        topic=sprintf("%-*.*s", minTopicChars, topiclength, $0) # extract the topic, padding it with spaces up to minTopicChars for easier reading 
+                        # if ( (imagedatatype != "") && ( topiclength<5 || firstslashpos>topiclength || topiclength==length($0)+1) ) {
+                        topic=sprintf("%-*.*s", minTopicChars, topiclength, $0) # extract the topic, padding it with spaces up to minTopicChars for easier reading
                         firstslashpos=index(topic, "/")
                         if (match(topic, /[^[:print:]]/)>0 || (imagedatatype != "" && firstslashpos==0 && topiclength<6) ) {
                             message=substr($0, topiclength+2, 40) "..."
-                            topic="..skipping..." topic 
+                            topic="..skipping..." topic
                             collectedMessage=""
                         } else {
                             message=substr($0, topiclength+2, 9999)
                             imagedatatype=match(message, "^" pngprefix ) ? "PNG" : ( match(message, "^" jpgprefix ) ? "JPEG" : "" )
-                            isJson=( index(message,"{") == 1 || index(message,"[") == 1)  # FIXME: check for "]" at message end, too
+                            isJSON=( index(message,"{") == 1 || index(message,"[") == 1)  # FIXME: check for "]" at message end, too
                             collectedMessage=message
                         }
                         # clean message (=remove non-printables) before printing:
                         gsub( /[^[:print:]]/ , "", topic )
                         gsub( /[^[:print:]]/ , "", message )
-                        if ( verbose ) { print "MESSAGE(" isJson "," optimizeJSON "): " message } ## FIXME
-                        if ( isJson && optimizeJSON ) {
-                            message=gensub( /^{ */                          , "{"     ,  "g", message)  # remove opening space
+                        if ( verbose ) { print "MESSAGE(" isJSON "," optimizeJSON "): " message } ## FIXME
+
+                        if ( isJSON && optimizeJSON ) {
+                            message=gensub( /^{ */                          , "{"     ,  "g", message)  # remove opening space after JSON brace
                             message=gensub( /" *: *(null|")/                , "\":\\1"    ,  "g", message)  # remove any spaces around the JSON colon for text values or null
                             message=gensub( /" *:[ ]*(-*[0-9]*[.]*[0-9]*)/ ,  "\":\\1"   ,  "g", message)  # remove any spaces around the JSON colon for numeric values
                             # message=gensub( /":([0-9])(, *")/            , "\": \\1\\2",  "g", message)  # pad any one-digit number with one space for better alignment across messages
@@ -408,13 +406,13 @@ gsub(/\"xy_val_tpl\" *:/,         "\"xy_value_template\":", message)
                             prevtimestr=timestr
                             fflush()
                             next
-                        } 
+                        }
                         { # print printable characters of all other lines, but skip the binary data of images:
                           if ( (imagedatatype == "") && ! (additionalSkipLines == "1") ) {
                             gsub( /[^[:print:]]/ , "", $0 )
                             printf "%s \n", $0
-                            if (isJson) { collectedMessage=collectedMessage " " $0 }   
-                            fflush() 
+                            if (isJSON) { collectedMessage=collectedMessage " " $0 }
+                            fflush()
                           }
                         } '    \
 | if [ -z "$noColor" ] ; then
@@ -430,5 +428,5 @@ gsub(/\"xy_val_tpl\" *:/,         "\"xy_value_template\":", message)
     | awk -- '{ gsub( "XXcol1timeXX|XXbeginofredXX|XXendofredXX|XXbeginofpurpleXX|XXendofpurpleXX|XXwhiteXX|XXcyanXX|XXyellowXX|XXnoneXX" , "" ); print }' \
     ;
 else
-    cat 
+    cat
 fi
