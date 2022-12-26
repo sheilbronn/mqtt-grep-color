@@ -114,7 +114,7 @@ do
         ;;
     v)  bVerbose="yes" # still unused...
         ;;
-    -)  echo "-- not yet allowed."
+    -)  echo "-- not supported."
         exit 1
         ;;
     esac
