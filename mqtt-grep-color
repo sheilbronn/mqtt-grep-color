@@ -141,280 +141,279 @@ else
 fi |
 gawk -b -v timeLen="$awkTimeLen" -v timeFormat="$awkTimeFormat" -v deltaTime="$awkDeltaTime" -v verbose="$bVerbose" \
       -v optimizeJSON="$awkOptimizeJSON" -v noColor="$noColor" -v additionalSkipLines="$awkAdditionalSkipLines" -v minTopicChars="${awkMinTopicChars:-1}" '
-BEGIN               {   jqcmd="jq ."  ; # jqcmd="cat"
-                        # PROCINFO[jqcmd, "READ_TIMEOUT"] = 1000
-                        PROCINFO[jqcmd, "RETRY"] = 1
-                        # pngprefix=sprintf("%c%c%c%c%c%c%c%c", 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
-                        pngprefix=sprintf("%c%c%c%c%c", 0x89, 0x50, 0x4E, 0x47, 0x0D) # reduced number of signature bytes as a workaround because of line split
-                        jpgprefix=sprintf("%c%c%c",   0xFF, 0xD8, 0xFF)       # shortened workaround for JPEG/JFIF
-                        t=systime()
-                        mintopicsize=3
-                        }
-/^$/                {   next } # skip any empty line
+BEGIN       {   jqcmd="jq ."  ; # jqcmd="cat"
+                # PROCINFO[jqcmd, "READ_TIMEOUT"] = 1000
+                PROCINFO[jqcmd, "RETRY"] = 1
+                # pngprefix=sprintf("%c%c%c%c%c%c%c%c", 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+                pngprefix=sprintf("%c%c%c%c%c", 0x89, 0x50, 0x4E, 0x47, 0x0D) # reduced number of signature bytes as a workaround because of line split
+                jpgprefix=sprintf("%c%c%c",   0xFF, 0xD8, 0xFF)         # shortened workaround for JPEG/JFIF
+                t=systime()
+                mintopicsize=3
+                }
+/^$/        {   next } # skip any empty line
 
 function compare(s1, s2) {
     l= length(s1) > length(s2) ? length(s1) : length(s2)
     for (i=1; i<=l && substr(s1,i,1) == substr(s2,i,1) ; i++)  { }
-    # print i
     return i-1
 }
 
-/^[.)(a-z\/A-Z0-9$&%;_+-]{1,300} /  { # topics are assumed to have only a certain length: 1-300, reduces amount of garbage
-                        if ( isJSON && collectedMessage && noColor == "yes" ) {
-                            print "*****" ; fflush() ;
-                            print collectedMessage | jqcmd # | getline beauty ; print beauty ;
-                            system("sleep 1") ;
-                            # ; fflush() ;
-                            # close(jqcmd)
-                            print "*****"
-                            ; fflush() ;
-                        }
-                        isJSON=0
-                        match($0, /^[.)(a-z\/A-Z0-9$&%;_+-]+/)
-                        topiclength=RLENGTH
-                        # if ( (imagedatatype != "") && ( topiclength<5 || firstslashpos>topiclength || topiclength==length($0)+1) ) {
-                        topic=sprintf("%-*.*s", minTopicChars, topiclength, $0) # extract the topic, padding it with spaces up to minTopicChars for easier reading
-                        firstslashpos=index(topic, "/")
-                        if (match(topic, /[^[:print:]]/)>0 || (imagedatatype != "" && firstslashpos==0 && topiclength<6) ) {
-                            message=substr($0, topiclength+2, 40) "..."
-                            topic="..skipping..." topic
-                            collectedMessage=""
-                        } else {
-                            message=substr($0, topiclength+2, 9999)
-                            imagedatatype=match(message, "^" pngprefix ) ? "PNG" : ( match(message, "^" jpgprefix ) ? "JPEG" : "" )
-                            isJSON=( index(message,"{") == 1 || index(message,"[") == 1)  # FIXME: check for "]" at message end, too
-                            collectedMessage=message
-                        }
-                        # clean message (=remove non-printables) before printing:
-                        gsub( /[^[:print:]]/ , "", topic )
-                        gsub( /[^[:print:]]/ , "", message )
-                        if ( verbose ) { print "MESSAGE(" isJSON "," optimizeJSON "): " message } ## FIXME
+/^[.)(a-z\/A-Z0-9$&%;_+-]{1,255} /  { # topics are assumed to have only a certain length: 1-255, reduces amount of garbage (255 is max on OpenWrt)
+                if ( isJSON && collectedMessage && noColor == "yes" ) {
+                    print "*****" ; fflush() ;
+                    print collectedMessage | jqcmd # | getline beauty ; print beauty ;
+                    system("sleep 1") ;
+                    # ; fflush() ;
+                    # close(jqcmd)
+                    print "*****"
+                    ; fflush() ;
+                }
+                isJSON=0
+                match($0, /^[.)(a-z\/A-Z0-9$&%;_+-]+/)
+                topiclength=RLENGTH
+                # if ( (imagedatatype != "") && ( topiclength<5 || firstslashpos>topiclength || topiclength==length($0)+1) ) {
+                topic=sprintf("%-*.*s", minTopicChars, topiclength, $0) # extract the topic, padding it with spaces up to minTopicChars for easier reading
+                firstslashpos=index(topic, "/")
+                if (match(topic, /[^[:print:]]/)>0 || (imagedatatype != "" && firstslashpos==0 && topiclength<6) ) {
+                    message=substr($0, topiclength+2, 40) "..."
+                    topic="..skipping..." topic
+                    collectedMessage=""
+                } else {
+                    message=substr($0, topiclength+2, 9999)
+                    imagedatatype=match(message, "^" pngprefix ) ? "PNG" : ( match(message, "^" jpgprefix ) ? "JPEG" : "" )
+                    isJSON=( index(message,"{") == 1 || index(message,"[") == 1)  # FIXME: check for "]" at message end, too
+                    collectedMessage=message
+                }
+                # clean message (=remove non-printables) before printing:
+                gsub( /[^[:print:]]/ , "", topic )
+                gsub( /[^[:print:]]/ , "", message )
+                if ( verbose ) { print "MESSAGE(" isJSON "," optimizeJSON "): " message } ## FIXME
 
-                        if ( isJSON && optimizeJSON ) {
-                            message=gensub( /^{ */                          , "{"     ,  "g", message)  # remove opening space after JSON brace
-                            message=gensub( /" *: *(null|")/                , "\":\\1"    ,  "g", message)  # remove any spaces around the JSON colon for text values or null
-                            message=gensub( /" *:[ ]*(-*[0-9]*[.]*[0-9]*)/ ,  "\":\\1"   ,  "g", message)  # remove any spaces around the JSON colon for numeric values
-                            # message=gensub( /":([0-9])(, *")/            , "\": \\1\\2",  "g", message)  # pad any one-digit number with one space for better alignment across messages
-                            message=gensub( /"Time" *:"[0-9T:-]*",/        , ""          ,  "g", message)  # eliminate the first "Time" key/value but only if it is followed by a comma
-                            message=gensub( /"([a-zA-Z _]+)" *: *(\[?){/   , "\"XXcyanXX\\1XXcyanXX\":\\2{"    , "g", message)  # highlight the name of a whole embedded object, e.g. device
+                if ( isJSON && optimizeJSON ) {
+                    message=gensub( /^{ */                          , "{"     ,  "g", message)  # remove opening space after JSON brace
+                    message=gensub( /" *: *(null|")/                , "\":\\1"    ,  "g", message)  # remove any spaces around the JSON colon for text values or null
+                    message=gensub( /" *:[ ]*(-*[0-9]*[.]*[0-9]*)/ ,  "\":\\1"   ,  "g", message)  # remove any spaces around the JSON colon for numeric values
+                    # message=gensub( /":([0-9])(, *")/            , "\": \\1\\2",  "g", message)  # pad any one-digit number with one space for better alignment across messages
+                    message=gensub( /"Time" *:"[0-9T:-]*",/        , ""          ,  "g", message)  # eliminate the first "Time" key/value but only if it is followed by a comma
+                    message=gensub( /"([a-zA-Z _]+)" *: *(\[?){/   , "\"XXcyanXX\\1XXcyanXX\":\\2{"    , "g", message)  # highlight the name of a whole embedded object, e.g. device
 
-                            message=gensub( /" *:( *)"([^"]+)"( *[,}]+)/  , "\":\\1\"XXwhiteXX\\2XXwhiteXX\"\\3" , "g", message)  # highlight a quoted string value in JSON
-                            message=gensub( /" *:( *)(null|-{0,1}([0-9]*[.]{0,1}[0-9]*))( *[,}]+)/   , "\":\\1XXyellowXX\\2XXyellowXX\\4 " , "g", message)  # highlight a numeric value in JSON
-                            message=gensub( / *,  *"/                               ,  ", \"" , "g", message)  # reduce spaces around a comma to max one
-                            message=gensub( /([,{] *)"([^"]+)"/                     ,  "\\1XXnoneXX\\2XXnoneXX" , "g", message)  # highlight keys and remove apostrophes around keys
+                    message=gensub( /" *:( *)"([^"]+)"( *[,}]+)/  , "\":\\1\"XXwhiteXX\\2XXwhiteXX\"\\3" , "g", message)  # highlight a quoted string value in JSON
+                    message=gensub( /" *:( *)(null|-{0,1}([0-9]*[.]{0,1}[0-9]*))( *[,}]+)/   , "\":\\1XXyellowXX\\2XXyellowXX\\4 " , "g", message)  # highlight a numeric value in JSON
+                    message=gensub( / *,  *"/                               ,  ", \"" , "g", message)  # reduce spaces around a comma to max one
+                    message=gensub( /([,{] *)"([^"]+)"/                     ,  "\\1XXnoneXX\\2XXnoneXX" , "g", message)  # highlight keys and remove apostrophes around keys
 
-gsub(/\"act_t\" *:/,             "\"action_topic\":", message)
-gsub(/\"act_tpl\" *:/,           "\"action_template\":", message)
-gsub(/\"atype\" *:/,             "\"automation_type\":", message)
-gsub(/\"aux_cmd_t\" *:/,         "\"aux_command_topic\":", message)
-gsub(/\"aux_stat_tpl\" *:/,      "\"aux_state_template\":", message)
-gsub(/\"aux_stat_t\" *:/,        "\"aux_state_topic\":", message)
-gsub(/\"avty\" *:/,              "\"availability\":", message)
-gsub(/\"avty_t\" *:/,            "\"availability_topic\":", message)
-gsub(/\"away_mode_cmd_t\" *:/,   "\"away_mode_command_topic\":", message)
-gsub(/\"away_mode_stat_tpl\" *:/,"\"away_mode_state_template\":", message)
-gsub(/\"away_mode_stat_t\" *:/,   "\"away_mode_state_topic\":", message)
-gsub(/\"b_tpl\" *:/,              "\"blue_template\":", message)
-gsub(/\"bri_cmd_t\" *:/,          "\"brightness_command_topic\":", message)
-gsub(/\"bri_scl\" *:/,            "\"brightness_scale\":", message)
-gsub(/\"bri_stat_t\" *:/,         "\"brightness_state_topic\":", message)
-gsub(/\"bri_tpl\" *:/,            "\"brightness_template\":", message)
-gsub(/\"bri_val_tpl\" *:/,        "\"brightness_value_template\":", message)
-gsub(/\"clr_temp_cmd_tpl\" *:/,   "\"color_temp_command_template\":", message)
-gsub(/\"bat_lev_t\" *:/,          "\"battery_level_topic\":", message)
-gsub(/\"bat_lev_tpl\" *:/,        "\"battery_level_template\":", message)
-gsub(/\"chrg_t\" *:/,             "\"charging_topic\":", message)
-gsub(/\"chrg_tpl\" *:/,           "\"charging_template\":", message)
-gsub(/\"clr_temp_cmd_t\" *:/,     "\"color_temp_command_topic\":", message)
-gsub(/\"clr_temp_stat_t\" *:/,    "\"color_temp_state_topic\":", message)
-gsub(/\"clr_temp_tpl\" *:/,       "\"color_temp_template\":", message)
-gsub(/\"clr_temp_val_tpl\" *:/,   "\"color_temp_value_template\":", message)
-gsub(/\"cln_t\" *:/,              "\"cleaning_topic\":", message)
-gsub(/\"cln_tpl\" *:/,            "\"cleaning_template\":", message)
-gsub(/\"cmd_off_tpl\" *:/,        "\"command_off_template\":", message)
-gsub(/\"cmd_on_tpl\" *:/,         "\"command_on_template\":", message)
-gsub(/\"cmd_t\" *:/,              "\"command_topic\":", message)
-gsub(/\"cmd_tpl\" *:/,            "\"command_template\":", message)
-gsub(/\"cod_arm_req\" *:/,        "\"code_arm_required\":", message)
-gsub(/\"cod_dis_req\" *:/,        "\"code_disarm_required\":", message)
-gsub(/\"curr_temp_t\" *:/,        "\"current_temperature_topic\":", message)
-gsub(/\"curr_temp_tpl\" *:/,      "\"current_temperature_template\":", message)
-gsub(/\"dev\" *:/,                "\"device\":", message)
-gsub(/\"dev_cla\" *:/,            "\"device_class\":", message)
-gsub(/\"dock_t\" *:/,             "\"docked_topic\":", message)
-gsub(/\"dock_tpl\" *:/,           "\"docked_template\":", message)
-gsub(/\"err_t\" *:/,              "\"error_topic\":", message)
-gsub(/\"err_tpl\" *:/,            "\"error_template\":", message)
-gsub(/\"fanspd_t\" *:/,           "\"fan_speed_topic\":", message)
-gsub(/\"fanspd_tpl\" *:/,         "\"fan_speed_template\":", message)
-gsub(/\"fanspd_lst\" *:/,         "\"fan_speed_list\":", message)
-gsub(/\"flsh_tlng\" *:/,          "\"flash_time_long\":", message)
-gsub(/\"flsh_tsht\" *:/,          "\"flash_time_short\":", message)
-gsub(/\"fx_cmd_t\" *:/,           "\"effect_command_topic\":", message)
-gsub(/\"fx_list\" *:/,            "\"effect_list\":", message)
-gsub(/\"fx_stat_t\" *:/,          "\"effect_state_topic\":", message)
-gsub(/\"fx_tpl\" *:/,             "\"effect_template\":", message)
-gsub(/\"fx_val_tpl\" *:/,         "\"effect_value_template\":", message)
-gsub(/\"exp_aft\" *:/,            "\"expire_after\":", message)
-gsub(/\"fan_mode_cmd_t\" *:/,     "\"fan_mode_command_topic\":", message)
-gsub(/\"fan_mode_stat_tpl\" *:/,  "\"fan_mode_state_template\":", message)
-gsub(/\"fan_mode_stat_t\" *:/,    "\"fan_mode_state_topic\":", message)
-gsub(/\"frc_upd\" *:/,            "\"force_update\":", message)
-gsub(/\"g_tpl\" *:/,              "\"green_template\":", message)
-gsub(/\"hold_cmd_t\" *:/,         "\"hold_command_topic\":", message)
-gsub(/\"hold_stat_tpl\" *:/,      "\"hold_state_template\":", message)
-gsub(/\"hold_stat_t\" *:/,        "\"hold_state_topic\":", message)
-gsub(/\"hs_cmd_t\" *:/,           "\"hs_command_topic\":", message)
-gsub(/\"hs_stat_t\" *:/,          "\"hs_state_topic\":", message)
-gsub(/\"hs_val_tpl\" *:/,         "\"hs_value_template\":", message)
-gsub(/\"ic\" *:/,                 "\"icon\":", message)
-gsub(/\"init\" *:/,               "\"initial\":", message)
-gsub(/\"json_attr_t\" *:/,        "\"json_attributes_topic\":", message)
-gsub(/\"json_attr_tpl\" *:/,      "\"json_attributes_template\":", message)
-gsub(/\"max_mirs\" *:/,           "\"max_mireds\":", message)
-gsub(/\"min_mirs\" *:/,           "\"min_mireds\":", message)
-gsub(/\"max_temp\" *:/,           "\"max_temp\":", message)
-gsub(/\"min_temp\" *:/,           "\"min_temp\":", message)
-gsub(/\"mode_cmd_t\" *:/,         "\"mode_command_topic\":", message)
-gsub(/\"mode_stat_tpl\" *:/,      "\"mode_state_template\":", message)
-gsub(/\"mode_stat_t\" *:/,        "\"mode_state_topic\":", message)
-gsub(/\"name\" *:/,               "\"name\":", message)
-gsub(/\"off_dly\" *:/,            "\"off_delay\":", message)
-gsub(/\"on_cmd_type\" *:/,        "\"on_command_type\":", message)
-gsub(/\"opt\" *:/,                "\"optimistic\":", message)
-gsub(/\"osc_cmd_t\" *:/,          "\"oscillation_command_topic\":", message)
-gsub(/\"osc_stat_t\" *:/,         "\"oscillation_state_topic\":", message)
-gsub(/\"osc_val_tpl\" *:/,        "\"oscillation_value_template\":", message)
-gsub(/\"pl\" *:/,                 "\"payload\":", message)
-gsub(/\"pl_arm_away\" *:/,        "\"payload_arm_away\":", message)
-gsub(/\"pl_arm_home\" *:/,        "\"payload_arm_home\":", message)
-gsub(/\"pl_arm_custom_b\" *:/,    "\"payload_arm_custom_bypass\":", message)
-gsub(/\"pl_arm_nite\" *:/,        "\"payload_arm_night\":", message)
-gsub(/\"pl_avail\" *:/,           "\"payload_available\":", message)
-gsub(/\"pl_cln_sp\" *:/,          "\"payload_clean_spot\":", message)
-gsub(/\"pl_cls\" *:/,             "\"payload_close\":", message)
-gsub(/\"pl_disarm\" *:/,          "\"payload_disarm\":", message)
-gsub(/\"pl_hi_spd\" *:/,          "\"payload_high_speed\":", message)
-gsub(/\"pl_home\" *:/,            "\"payload_home\":", message)
-gsub(/\"pl_lock\" *:/,            "\"payload_lock\":", message)
-gsub(/\"pl_loc\" *:/,             "\"payload_locate\":", message)
-gsub(/\"pl_lo_spd\" *:/,          "\"payload_low_speed\":", message)
-gsub(/\"pl_med_spd\" *:/,         "\"payload_medium_speed\":", message)
-gsub(/\"pl_not_avail\" *:/,       "\"payload_not_available\":", message)
-gsub(/\"pl_not_home\" *:/,        "\"payload_not_home\":", message)
-gsub(/\"pl_off\" *:/,             "\"payload_off\":", message)
-gsub(/\"pl_off_spd\" *:/,         "\"payload_off_speed\":", message)
-gsub(/\"pl_on\" *:/,              "\"payload_on\":", message)
-gsub(/\"pl_open\" *:/,            "\"payload_open\":", message)
-gsub(/\"pl_osc_off\" *:/,         "\"payload_oscillation_off\":", message)
-gsub(/\"pl_osc_on\" *:/,          "\"payload_oscillation_on\":", message)
-gsub(/\"pl_paus\" *:/,            "\"payload_pause\":", message)
-gsub(/\"pl_stop\" *:/,            "\"payload_stop\":", message)
-gsub(/\"pl_strt\" *:/,            "\"payload_start\":", message)
-gsub(/\"pl_stpa\" *:/,            "\"payload_start_pause\":", message)
-gsub(/\"pl_ret\" *:/,             "\"payload_return_to_base\":", message)
-gsub(/\"pl_toff\" *:/,            "\"payload_turn_off\":", message)
-gsub(/\"pl_ton\" *:/,             "\"payload_turn_on\":", message)
-gsub(/\"pl_unlk\" *:/,            "\"payload_unlock\":", message)
-gsub(/\"pos_clsd\" *:/,           "\"position_closed\":", message)
-gsub(/\"pos_open\" *:/,           "\"position_open\":", message)
-gsub(/\"pow_cmd_t\" *:/,          "\"power_command_topic\":", message)
-gsub(/\"pow_stat_t\" *:/,         "\"power_state_topic\":", message)
-gsub(/\"pow_stat_tpl\" *:/,       "\"power_state_template\":", message)
-gsub(/\"r_tpl\" *:/,              "\"red_template\":", message)
-gsub(/\"ret\" *:/,                "\"retain\":", message)
-gsub(/\"rgb_cmd_tpl\" *:/,        "\"rgb_command_template\":", message)
-gsub(/\"rgb_cmd_t\" *:/,          "\"rgb_command_topic\":", message)
-gsub(/\"rgb_stat_t\" *:/,         "\"rgb_state_topic\":", message)
-gsub(/\"rgb_val_tpl\" *:/,        "\"rgb_value_template\":", message)
-gsub(/\"send_cmd_t\" *:/,         "\"send_command_topic\":", message)
-gsub(/\"send_if_off\" *:/,        "\"send_if_off\":", message)
-gsub(/\"set_fan_spd_t\" *:/,      "\"set_fan_speed_topic\":", message)
-gsub(/\"set_pos_tpl\" *:/,        "\"set_position_template\":", message)
-gsub(/\"set_pos_t\" *:/,          "\"set_position_topic\":", message)
-gsub(/\"pos_t\" *:/,              "\"position_topic\":", message)
-gsub(/\"spd_cmd_t\" *:/,          "\"speed_command_topic\":", message)
-gsub(/\"spd_stat_t\" *:/,         "\"speed_state_topic\":", message)
-gsub(/\"spd_val_tpl\" *:/,        "\"speed_value_template\":", message)
-gsub(/\"spds\" *:/,               "\"speeds\":", message)
-gsub(/\"src_type\" *:/,           "\"source_type\":", message)
-gsub(/\"stat_clsd\" *:/,          "\"state_closed\":", message)
-gsub(/\"stat_closing\" *:/,       "\"state_closing\":", message)
-gsub(/\"stat_off\" *:/,           "\"state_off\":", message)
-gsub(/\"stat_on\" *:/,            "\"state_on\":", message)
-gsub(/\"stat_open\" *:/,          "\"state_open\":", message)
-gsub(/\"stat_opening\" *:/,       "\"state_opening\":", message)
-gsub(/\"stat_locked\" *:/,        "\"state_locked\":", message)
-gsub(/\"stat_unlocked\" *:/,      "\"state_unlocked\":", message)
-gsub(/\"stat_t\" *:/,             "\"state_topic\":", message)
-gsub(/\"stat_tpl\" *:/,           "\"state_template\":", message)
-gsub(/\"stat_val_tpl\" *:/,       "\"state_value_template\":", message)
-gsub(/\"stype\" *:/,              "\"subtype\":", message)
-gsub(/\"sup_feat\" *:/,           "\"supported_features\":", message)
-gsub(/\"swing_mode_cmd_t\" *:/,   "\"swing_mode_command_topic\":", message)
-gsub(/\"swing_mode_stat_tpl\" *:/,"\"swing_mode_state_template\":", message)
-gsub(/\"swing_mode_stat_t\" *:/,  "\"swing_mode_state_topic\":", message)
-gsub(/\"temp_cmd_t\" *:/,         "\"temperature_command_topic\":", message)
-gsub(/\"temp_hi_cmd_t\" *:/,      "\"temperature_high_command_topic\":", message)
-gsub(/\"temp_hi_stat_tpl\" *:/,   "\"temperature_high_state_template\":", message)
-gsub(/\"temp_hi_stat_t\" *:/,     "\"temperature_high_state_topic\":", message)
-gsub(/\"temp_lo_cmd_t\" *:/,      "\"temperature_low_command_topic\":", message)
-gsub(/\"temp_lo_stat_tpl\" *:/,   "\"temperature_low_state_template\":", message)
-gsub(/\"temp_lo_stat_t\" *:/,     "\"temperature_low_state_topic\":", message)
-gsub(/\"temp_stat_tpl\" *:/,      "\"temperature_state_template\":", message)
-gsub(/\"temp_stat_t\" *:/,        "\"temperature_state_topic\":", message)
-gsub(/\"temp_unit\" *:/,          "\"temperature_unit\":", message)
-gsub(/\"tilt_clsd_val\" *:/,      "\"tilt_closed_value\":", message)
-gsub(/\"tilt_cmd_t\" *:/,         "\"tilt_command_topic\":", message)
-gsub(/\"tilt_inv_stat\" *:/,      "\"tilt_invert_state\":", message)
-gsub(/\"tilt_max\" *:/,           "\"tilt_max\":", message)
-gsub(/\"tilt_min\" *:/,           "\"tilt_min\":", message)
-gsub(/\"tilt_opnd_val\" *:/,      "\"tilt_opened_value\":", message)
-gsub(/\"tilt_opt\" *:/,           "\"tilt_optimistic\":", message)
-gsub(/\"tilt_status_t\" *:/,      "\"tilt_status_topic\":", message)
-gsub(/\"tilt_status_tpl\" *:/,    "\"tilt_status_template\":", message)
-gsub(/\"t\" *:/,                  "\"topic\":", message)
-gsub(/\"uniq_id\" *:/,            "\"unique_id\":", message)
-gsub(/\"unit_of_meas\" *:/,       "\"unit_of_measurement\":", message)
-gsub(/\"val_tpl\" *:/,            "\"value_template\":", message)
-gsub(/\"whit_val_cmd_t\" *:/,     "\"white_value_command_topic\":", message)
-gsub(/\"whit_val_scl\" *:/,       "\"white_value_scale\":", message)
-gsub(/\"whit_val_stat_t\" *:/,    "\"white_value_state_topic\":", message)
-gsub(/\"whit_val_tpl\" *:/,       "\"white_value_template\":", message)
-gsub(/\"xy_cmd_t\" *:/,           "\"xy_command_topic\":", message)
-gsub(/\"xy_stat_t\" *:/,          "\"xy_state_topic\":", message)
-gsub(/\"xy_val_tpl\" *:/,         "\"xy_value_template\":", message)
-                            } else {
-                                # works but output not pretty:
-                                # message=gensub( /^([[:alnum:]]+)$/ , "XXwhiteXX\\1XXwhiteXX", 1, message)  # highlight a simple (one-word) string
-                            }
-                            # print imagedatatype "##" limitpos "##" topic "##"message"##"
-                            timeVal=systime() - (deltaTime ? t  : 0)
-                            timestr = "00000000000000" strftime(timeFormat, timeVal) ;
-                            timestr = substr( timestr, length(timestr)-timeLen +1)
-                            if ( imagedatatype != "" ) {
-                                message="<BINARY FORMAT: " imagedatatype ">"
-                            }
-                            if (noColor == "yes") {
-                                printf "%s %s  %s\n", timestr , topic, message
-                            } else {
-                                topic=gensub( "^[.)(/a-zA-Z0-9$&%;_+-]*", "XXbeginofredXX\\0XXendofredXX", 1 , topic)
-                                c=length(timestr)-compare(timestr,prevtimestr)
-                                printf "%s %s %s\n" , "XXcol1timeXX" substr(timestr,1,c*99) "XXcol1timeXX" substr(timestr,c*99+1,99) , topic, message
-                                # "\033[0;31m" $0 "\033[0m"
-                            }
-                            prevtimestr=timestr
-                            fflush()
-                            next
-                        }
-                        { # print printable characters of all other lines, but skip the binary data of images:
-                          if ( (imagedatatype == "") && ! (additionalSkipLines == "1") ) {
-                            gsub( /[^[:print:]]/ , "", $0 )
-                            printf "%s \n", $0
-                            if (isJSON) { collectedMessage=collectedMessage " " $0 }
-                            fflush()
-                          }
-                        } '    \
+gsub(/"act_t" *:/,             "\"action_topic\":", message)
+gsub(/"act_tpl" *:/,           "\"action_template\":", message)
+gsub(/"atype" *:/,             "\"automation_type\":", message)
+gsub(/"aux_cmd_t" *:/,         "\"aux_command_topic\":", message)
+gsub(/"aux_stat_tpl" *:/,      "\"aux_state_template\":", message)
+gsub(/"aux_stat_t" *:/,        "\"aux_state_topic\":", message)
+gsub(/"avty" *:/,              "\"availability\":", message)
+gsub(/"avty_t" *:/,            "\"availability_topic\":", message)
+gsub(/"away_mode_cmd_t" *:/,   "\"away_mode_command_topic\":", message)
+gsub(/"away_mode_stat_tpl" *:/,"\"away_mode_state_template\":", message)
+gsub(/"away_mode_stat_t" *:/,   "\"away_mode_state_topic\":", message)
+gsub(/"b_tpl" *:/,              "\"blue_template\":", message)
+gsub(/"bri_cmd_t" *:/,          "\"brightness_command_topic\":", message)
+gsub(/"bri_scl" *:/,            "\"brightness_scale\":", message)
+gsub(/"bri_stat_t" *:/,         "\"brightness_state_topic\":", message)
+gsub(/"bri_tpl" *:/,            "\"brightness_template\":", message)
+gsub(/"bri_val_tpl" *:/,        "\"brightness_value_template\":", message)
+gsub(/"clr_temp_cmd_tpl" *:/,   "\"color_temp_command_template\":", message)
+gsub(/"bat_lev_t" *:/,          "\"battery_level_topic\":", message)
+gsub(/"bat_lev_tpl" *:/,        "\"battery_level_template\":", message)
+gsub(/"chrg_t" *:/,             "\"charging_topic\":", message)
+gsub(/"chrg_tpl" *:/,           "\"charging_template\":", message)
+gsub(/"clr_temp_cmd_t" *:/,     "\"color_temp_command_topic\":", message)
+gsub(/"clr_temp_stat_t" *:/,    "\"color_temp_state_topic\":", message)
+gsub(/"clr_temp_tpl" *:/,       "\"color_temp_template\":", message)
+gsub(/"clr_temp_val_tpl" *:/,   "\"color_temp_value_template\":", message)
+gsub(/"cln_t" *:/,              "\"cleaning_topic\":", message)
+gsub(/"cln_tpl" *:/,            "\"cleaning_template\":", message)
+gsub(/"cmd_off_tpl" *:/,        "\"command_off_template\":", message)
+gsub(/"cmd_on_tpl" *:/,         "\"command_on_template\":", message)
+gsub(/"cmd_t" *:/,              "\"command_topic\":", message)
+gsub(/"cmd_tpl" *:/,            "\"command_template\":", message)
+gsub(/"cod_arm_req" *:/,        "\"code_arm_required\":", message)
+gsub(/"cod_dis_req" *:/,        "\"code_disarm_required\":", message)
+gsub(/"curr_temp_t" *:/,        "\"current_temperature_topic\":", message)
+gsub(/"curr_temp_tpl" *:/,      "\"current_temperature_template\":", message)
+gsub(/"dev" *:/,                "\"device\":", message)
+gsub(/"dev_cla" *:/,            "\"device_class\":", message)
+gsub(/"dock_t" *:/,             "\"docked_topic\":", message)
+gsub(/"dock_tpl" *:/,           "\"docked_template\":", message)
+gsub(/"err_t" *:/,              "\"error_topic\":", message)
+gsub(/"err_tpl" *:/,            "\"error_template\":", message)
+gsub(/"fanspd_t" *:/,           "\"fan_speed_topic\":", message)
+gsub(/"fanspd_tpl" *:/,         "\"fan_speed_template\":", message)
+gsub(/"fanspd_lst" *:/,         "\"fan_speed_list\":", message)
+gsub(/"flsh_tlng" *:/,          "\"flash_time_long\":", message)
+gsub(/"flsh_tsht" *:/,          "\"flash_time_short\":", message)
+gsub(/"fx_cmd_t" *:/,           "\"effect_command_topic\":", message)
+gsub(/"fx_list" *:/,            "\"effect_list\":", message)
+gsub(/"fx_stat_t" *:/,          "\"effect_state_topic\":", message)
+gsub(/"fx_tpl" *:/,             "\"effect_template\":", message)
+gsub(/"fx_val_tpl" *:/,         "\"effect_value_template\":", message)
+gsub(/"exp_aft" *:/,            "\"expire_after\":", message)
+gsub(/"fan_mode_cmd_t" *:/,     "\"fan_mode_command_topic\":", message)
+gsub(/"fan_mode_stat_tpl" *:/,  "\"fan_mode_state_template\":", message)
+gsub(/"fan_mode_stat_t" *:/,    "\"fan_mode_state_topic\":", message)
+gsub(/"frc_upd" *:/,            "\"force_update\":", message)
+gsub(/"g_tpl" *:/,              "\"green_template\":", message)
+gsub(/"hold_cmd_t" *:/,         "\"hold_command_topic\":", message)
+gsub(/"hold_stat_tpl" *:/,      "\"hold_state_template\":", message)
+gsub(/"hold_stat_t" *:/,        "\"hold_state_topic\":", message)
+gsub(/"hs_cmd_t" *:/,           "\"hs_command_topic\":", message)
+gsub(/"hs_stat_t" *:/,          "\"hs_state_topic\":", message)
+gsub(/"hs_val_tpl" *:/,         "\"hs_value_template\":", message)
+gsub(/"ic" *:/,                 "\"icon\":", message)
+gsub(/"init" *:/,               "\"initial\":", message)
+gsub(/"json_attr_t" *:/,        "\"json_attributes_topic\":", message)
+gsub(/"json_attr_tpl" *:/,      "\"json_attributes_template\":", message)
+gsub(/"max_mirs" *:/,           "\"max_mireds\":", message)
+gsub(/"min_mirs" *:/,           "\"min_mireds\":", message)
+gsub(/"max_temp" *:/,           "\"max_temp\":", message)
+gsub(/"min_temp" *:/,           "\"min_temp\":", message)
+gsub(/"mode_cmd_t" *:/,         "\"mode_command_topic\":", message)
+gsub(/"mode_stat_tpl" *:/,      "\"mode_state_template\":", message)
+gsub(/"mode_stat_t" *:/,        "\"mode_state_topic\":", message)
+gsub(/"name" *:/,               "\"name\":", message)
+gsub(/"off_dly" *:/,            "\"off_delay\":", message)
+gsub(/"on_cmd_type" *:/,        "\"on_command_type\":", message)
+gsub(/"opt" *:/,                "\"optimistic\":", message)
+gsub(/"osc_cmd_t" *:/,          "\"oscillation_command_topic\":", message)
+gsub(/"osc_stat_t" *:/,         "\"oscillation_state_topic\":", message)
+gsub(/"osc_val_tpl" *:/,        "\"oscillation_value_template\":", message)
+gsub(/"pl" *:/,                 "\"payload\":", message)
+gsub(/"pl_arm_away" *:/,        "\"payload_arm_away\":", message)
+gsub(/"pl_arm_home" *:/,        "\"payload_arm_home\":", message)
+gsub(/"pl_arm_custom_b" *:/,    "\"payload_arm_custom_bypass\":", message)
+gsub(/"pl_arm_nite" *:/,        "\"payload_arm_night\":", message)
+gsub(/"pl_avail" *:/,           "\"payload_available\":", message)
+gsub(/"pl_cln_sp" *:/,          "\"payload_clean_spot\":", message)
+gsub(/"pl_cls" *:/,             "\"payload_close\":", message)
+gsub(/"pl_disarm" *:/,          "\"payload_disarm\":", message)
+gsub(/"pl_hi_spd" *:/,          "\"payload_high_speed\":", message)
+gsub(/"pl_home" *:/,            "\"payload_home\":", message)
+gsub(/"pl_lock" *:/,            "\"payload_lock\":", message)
+gsub(/"pl_loc" *:/,             "\"payload_locate\":", message)
+gsub(/"pl_lo_spd" *:/,          "\"payload_low_speed\":", message)
+gsub(/"pl_med_spd" *:/,         "\"payload_medium_speed\":", message)
+gsub(/"pl_not_avail" *:/,       "\"payload_not_available\":", message)
+gsub(/"pl_not_home" *:/,        "\"payload_not_home\":", message)
+gsub(/"pl_off" *:/,             "\"payload_off\":", message)
+gsub(/"pl_off_spd" *:/,         "\"payload_off_speed\":", message)
+gsub(/"pl_on" *:/,              "\"payload_on\":", message)
+gsub(/"pl_open" *:/,            "\"payload_open\":", message)
+gsub(/"pl_osc_off" *:/,         "\"payload_oscillation_off\":", message)
+gsub(/"pl_osc_on" *:/,          "\"payload_oscillation_on\":", message)
+gsub(/"pl_paus" *:/,            "\"payload_pause\":", message)
+gsub(/"pl_stop" *:/,            "\"payload_stop\":", message)
+gsub(/"pl_strt" *:/,            "\"payload_start\":", message)
+gsub(/"pl_stpa" *:/,            "\"payload_start_pause\":", message)
+gsub(/"pl_ret" *:/,             "\"payload_return_to_base\":", message)
+gsub(/"pl_toff" *:/,            "\"payload_turn_off\":", message)
+gsub(/"pl_ton" *:/,             "\"payload_turn_on\":", message)
+gsub(/"pl_unlk" *:/,            "\"payload_unlock\":", message)
+gsub(/"pos_clsd" *:/,           "\"position_closed\":", message)
+gsub(/"pos_open" *:/,           "\"position_open\":", message)
+gsub(/"pow_cmd_t" *:/,          "\"power_command_topic\":", message)
+gsub(/"pow_stat_t" *:/,         "\"power_state_topic\":", message)
+gsub(/"pow_stat_tpl" *:/,       "\"power_state_template\":", message)
+gsub(/"r_tpl" *:/,              "\"red_template\":", message)
+gsub(/"ret" *:/,                "\"retain\":", message)
+gsub(/"rgb_cmd_tpl" *:/,        "\"rgb_command_template\":", message)
+gsub(/"rgb_cmd_t" *:/,          "\"rgb_command_topic\":", message)
+gsub(/"rgb_stat_t" *:/,         "\"rgb_state_topic\":", message)
+gsub(/"rgb_val_tpl" *:/,        "\"rgb_value_template\":", message)
+gsub(/"send_cmd_t" *:/,         "\"send_command_topic\":", message)
+gsub(/"send_if_off" *:/,        "\"send_if_off\":", message)
+gsub(/"set_fan_spd_t" *:/,      "\"set_fan_speed_topic\":", message)
+gsub(/"set_pos_tpl" *:/,        "\"set_position_template\":", message)
+gsub(/"set_pos_t" *:/,          "\"set_position_topic\":", message)
+gsub(/"pos_t" *:/,              "\"position_topic\":", message)
+gsub(/"spd_cmd_t" *:/,          "\"speed_command_topic\":", message)
+gsub(/"spd_stat_t" *:/,         "\"speed_state_topic\":", message)
+gsub(/"spd_val_tpl" *:/,        "\"speed_value_template\":", message)
+gsub(/"spds" *:/,               "\"speeds\":", message)
+gsub(/"src_type" *:/,           "\"source_type\":", message)
+gsub(/"stat_clsd" *:/,          "\"state_closed\":", message)
+gsub(/"stat_closing" *:/,       "\"state_closing\":", message)
+gsub(/"stat_off" *:/,           "\"state_off\":", message)
+gsub(/"stat_on" *:/,            "\"state_on\":", message)
+gsub(/"stat_open" *:/,          "\"state_open\":", message)
+gsub(/"stat_opening" *:/,       "\"state_opening\":", message)
+gsub(/"stat_locked" *:/,        "\"state_locked\":", message)
+gsub(/"stat_unlocked" *:/,      "\"state_unlocked\":", message)
+gsub(/"stat_t" *:/,             "\"state_topic\":", message)
+gsub(/"stat_tpl" *:/,           "\"state_template\":", message)
+gsub(/"stat_val_tpl" *:/,       "\"state_value_template\":", message)
+gsub(/"stype" *:/,              "\"subtype\":", message)
+gsub(/"sup_feat" *:/,           "\"supported_features\":", message)
+gsub(/"swing_mode_cmd_t" *:/,   "\"swing_mode_command_topic\":", message)
+gsub(/"swing_mode_stat_tpl" *:/,"\"swing_mode_state_template\":", message)
+gsub(/"swing_mode_stat_t" *:/,  "\"swing_mode_state_topic\":", message)
+gsub(/"temp_cmd_t" *:/,         "\"temperature_command_topic\":", message)
+gsub(/"temp_hi_cmd_t" *:/,      "\"temperature_high_command_topic\":", message)
+gsub(/"temp_hi_stat_tpl" *:/,   "\"temperature_high_state_template\":", message)
+gsub(/"temp_hi_stat_t" *:/,     "\"temperature_high_state_topic\":", message)
+gsub(/"temp_lo_cmd_t" *:/,      "\"temperature_low_command_topic\":", message)
+gsub(/"temp_lo_stat_tpl" *:/,   "\"temperature_low_state_template\":", message)
+gsub(/"temp_lo_stat_t" *:/,     "\"temperature_low_state_topic\":", message)
+gsub(/"temp_stat_tpl" *:/,      "\"temperature_state_template\":", message)
+gsub(/"temp_stat_t" *:/,        "\"temperature_state_topic\":", message)
+gsub(/"temp_unit" *:/,          "\"temperature_unit\":", message)
+gsub(/"tilt_clsd_val" *:/,      "\"tilt_closed_value\":", message)
+gsub(/"tilt_cmd_t" *:/,         "\"tilt_command_topic\":", message)
+gsub(/"tilt_inv_stat" *:/,      "\"tilt_invert_state\":", message)
+gsub(/"tilt_max" *:/,           "\"tilt_max\":", message)
+gsub(/"tilt_min" *:/,           "\"tilt_min\":", message)
+gsub(/"tilt_opnd_val" *:/,      "\"tilt_opened_value\":", message)
+gsub(/"tilt_opt" *:/,           "\"tilt_optimistic\":", message)
+gsub(/"tilt_status_t" *:/,      "\"tilt_status_topic\":", message)
+gsub(/"tilt_status_tpl" *:/,    "\"tilt_status_template\":", message)
+gsub(/"t" *:/,                  "\"topic\":", message)
+gsub(/"uniq_id" *:/,            "\"unique_id\":", message)
+gsub(/"unit_of_meas" *:/,       "\"unit_of_measurement\":", message)
+gsub(/"val_tpl" *:/,            "\"value_template\":", message)
+gsub(/"whit_val_cmd_t" *:/,     "\"white_value_command_topic\":", message)
+gsub(/"whit_val_scl" *:/,       "\"white_value_scale\":", message)
+gsub(/"whit_val_stat_t" *:/,    "\"white_value_state_topic\":", message)
+gsub(/"whit_val_tpl" *:/,       "\"white_value_template\":", message)
+gsub(/"xy_cmd_t" *:/,           "\"xy_command_topic\":", message)
+gsub(/"xy_stat_t" *:/,          "\"xy_state_topic\":", message)
+gsub(/"xy_val_tpl" *:/,         "\"xy_value_template\":", message)
+                    } else {
+                        # works but output not pretty:
+                        # message=gensub( /^([[:alnum:]]+)$/ , "XXwhiteXX\\1XXwhiteXX", 1, message)  # highlight a simple (one-word) string
+                    }
+                    # print imagedatatype "##" limitpos "##" topic "##"message"##"
+                    timeVal=systime() - (deltaTime ? t  : 0)
+                    timestr = "00000000000000" strftime(timeFormat, timeVal) ;
+                    timestr = substr( timestr, length(timestr)-timeLen +1)
+                    if ( imagedatatype != "" ) {
+                        message="<BINARY FORMAT: " imagedatatype ">"
+                    }
+                    if (noColor == "yes") {
+                        printf "%s %s  %s\n", timestr , topic, message
+                    } else {
+                        topic=gensub( "^[.)(/a-zA-Z0-9$&%;_+-]*", "XXbeginofredXX\\0XXendofredXX", 1 , topic)
+                        c=length(timestr)-compare(timestr,prevtimestr)
+                        printf "%s %s %s\n" , "XXcol1timeXX" substr(timestr,1,c*99) "XXcol1timeXX" substr(timestr,c*99+1,99) , topic, message
+                        # "\033[0;31m" $0 "\033[0m"
+                    }
+                    prevtimestr=timestr
+                    fflush()
+                    next
+                }
+                { # print printable characters of all other lines, but skip the binary data of images:
+                    if ( (imagedatatype == "") && ! (additionalSkipLines == "1") ) {
+                    gsub( /[^[:print:]]/ , "", $0 )
+                    printf "%s \n", $0
+                    if (isJSON) { collectedMessage=collectedMessage " " $0 }
+                    fflush()
+                    }
+                } '    \
 | if [ -z "$noColor" ] ; then
       GREP_COLOR="$red"     $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXbeginofredXX[.)(/a-zA-Z0-9$&%;_+-]+XXendofredXX'    \
     | GREP_COLOR="$purple"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXbeginofpurpleXXhomeassistant/[.)(/a-zA-Z0-9$&%;_+-]+XXendofpurpleXX'    \
