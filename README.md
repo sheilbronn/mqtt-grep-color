@@ -16,7 +16,7 @@ These features ease MQTT debugging on the command line quite a bit as you can se
 3. Wellknown binary data (e.g. JPG, PNG) is replaced by an appropiate marker.
 4. mqtt-grep-color relies heavily on the **output coloring feature of GNU grep**. However, the [BusyBox version of grep](https://boxmatrix.info/wiki/Property:grep) does not support coloring, so the script cannot color the output on BusyBox.
 5. If you happen to have a BusyBox grep that doesn't support line buffering, try to install the command `stdbuf` (e.g. from package "coreutils-stdbuf" on OpenWrt).  
-  Otherwise, ugly, bulky, delayed output might be the consequence.... (the script might warn about this)
+   Otherwise, ugly, bulky, delayed output might be the consequence.... (the script might warn about this)
 6. If you prefer a time stamp instead of the wallclock time, use option `-s`.
 7. To optimize JSON messages, use the option `-o`:  
     This will expand abbreviated keys in [Home Assistant MQTT discovery](https://www.home-assistant.io/docs/mqtt/discovery) announcements and also eliminate a redundant "Time" attribute.
