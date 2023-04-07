@@ -176,7 +176,7 @@ function subsm(s1, s2) {
     message=gensub( s1, s3, "g", message)
 }
 
-/^[.)(a-z\/A-Z0-9$&%;_+-]{1,255} /  { # topics are assumed to have only a certain length: 1-255, reduces amount of garbage (255 is max on OpenWrt)
+/^[.)(a-z\/A-Z0-9$&%;_+-]{1,255} /  { # topics are assumed to have  a maximum length of 255, reduces amount of garbage (255 is max on OpenWrt)
                 g="g"
                 if ( isJSON && collectedMessage && noColor ) {
                     # print "*****" ; fflush() ; print collectedMessage #  jqcmd # | getline beauty ; print beauty ; system("sleep 1") ;
@@ -221,7 +221,7 @@ function subsm(s1, s2) {
                             # message=gensub( /" *:( *)"([a-zA-z0-9]+)"( *[,}]+)/  , "\":\\1\"XXwhiteXX\\2XXwhiteXX\"\\3" , g, message)  # .. and remove quotes if single word
                             message=gensub( /" *:( *)(null|-{0,1}([0-9]*[.]{0,1}[0-9]*))( *[,}]+)/   , "\":\\1XXyellowXX\\2XXyellowXX\\4 " , g, message)  # highlight a numeric value in JSON
                             if (removeKeyQuotes) {
-                                message=gensub( /([,{] *)"([^"]+)"/            ,  "\\1XXnoneXX\\2XXnoneXX" , g, message)  # highlight keys and remove apostrophes around keys
+                                message=gensub( /([,{] *)"([^"]+)"( *:)/            ,  "\\1XXnoneXX\\2XXnoneXX\\3" , g, message)  # highlight keys and remove apostrophes around keys
                                 message=gensub( /([,{] *)\\"([^\\"]+)\\" *:/      ,  "\\1*\\2*:" , g, message)  # modify escaping slashes for quotes around keys within messages: 
                                 message=gensub( /: *\\"([^\\"]*)\\"()/      ,  ":*\\1*\\2" , g, message)  #  ... and for escaping slashes around values, too.
                                 # { ..., payload {\"linkquality\":44, \"state\":\"OFF\",\"update\":{\"installed_version\":16909577, \"latest_version\":16909577, \"state\":\"idle\"},\"update_available\":false}"}
