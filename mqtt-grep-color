@@ -166,6 +166,7 @@ BEGIN       {   jqcmd="jq ."  ; # jqcmd="cat"
 
 function compare(s1, s2, anypos) {
     usepos=0
+    s2=s2 "/" # FIXME/TEST: Nicer if previous string is shorter than new string
     maxlen= length(s1) > length(s2) ? length(s1) : length(s2)
     for (i=1 ; i<=maxlen && substr(s1,i,1) == substr(s2,i,1) ; i++)  { 
         if (substr(s1,i,1)=="/") {
@@ -233,6 +234,7 @@ function subsm(s1, s2) {
                         gsub( /^\[0;3.m\[I\]/ , "" , message) # remove color garbage at beginning of message (e.g. from esphome)
                         gsub( /\[0m$/         , "" , message) # ... and color garbage at end of message 
                         gsub( /^-{0,1}[0-9]*[.]{0,1}[0-9]*$/, "XXyellowXX&XXyellowXX" , message) # ... and yellowfy a lonely number
+                        gsub( /^[a-zA-Z]{1,5}$/, "XXyellowXX&XXyellowXX" , message) # ... or a short lonely word
                     }
 
 gsub(/"act_t" *:/,             "\"action_topic\":", message)
@@ -422,27 +424,33 @@ gsub(/"xy_val_tpl" *:/,         "\"xy_value_template\":", message)
                         # message=gensub( /^([[:alnum:]]+)$/ , "XXwhiteXX\\1XXwhiteXX", g, message)  # highlight a simple (one-word) string
                     }
                     # print imagedatatype "##" limitpos "##" topic "##"message"##"
-                    timeVal=systime() - (deltaTime ? t  : 0)
-                    timestr = "00000000000000" strftime(timeFormat, timeVal) ;
-                    timestr = substr( timestr, length(timestr)-timeLen +1)
+                    timeVal=systime() - (deltaTime ? t : 0)
+                    msgtime = "00000000000000" strftime(timeFormat, timeVal)
+                    msgtime = substr( msgtime, length(msgtime)-timeLen +1)
                     if ( imagedatatype != "" ) {
                         message="<BINARY FORMAT: " imagedatatype ">"
                     }
                     if (noColor) {
-                        printf "%s %s  %s\n", timestr , topic, message
+                        printf "%s %s  %s\n", msgtime , topic, message
                     } else {
+                        timediff=msgtime-prevmsgtime
                         if (optimizeJSON) {
                             cTopic=compare(topic,prevtopic, 1==0)
-                            # cTopic = cTopic < 6 ? 0 : cTopic
-                            prevtopic=topic
+                            if (cTopic==0) {
+                                topicdiff=0
+                            } else if (length(prevtopic)!=length(topic)) {
+                                topicdiff=length(prevtopic)-length(topic) 
+                                topicdiff= (topicdiff<0) ? 0 : (topicdiff>2) ? 1 : topicdiff
+                            }
+                            prevtopic=topic # save topic content for the next message
                         }
-                        topic=substr(topic,1,cTopic) "XXbeginofredXX" substr(topic, cTopic+1,999) "XXendofredXX"
-                        cTime=compare(timestr,prevtimestr, 1==1) - 1
-                        cTime= cTime<length(timestr)-1 ? 0 : cTime
-                        printf "%s %s %s \n" , substr(timestr,1,cTime) "XXcol1timeXX" substr(timestr,cTime+1,99) "XXcol1timeXX" , topic, message
-                        # "\033[0;31m" $0 "\033[0m"
+                        if (topiclength>7 || firstslashpos>0 || timediff>0) { # if a (1) short topic, (2.) with no slashes, (3.) at the same time - probably not a topic
+                            topic=substr(topic,1,cTopic) "XXbeginofredXX" substr(topic, cTopic+1,999) "XXendofredXX" substr("   ",1,topicdiff)
+                        }
+                        cTime=(timediff==0) ? length(msgtime) : ( timediff<2 ? length(msgtime)-1 : 0 )
+                        printf "%s %s %s \n" , substr(msgtime,1,cTime) "XXcol1timeXX" substr(msgtime,cTime+1,99) "XXcol1timeXX" , topic, message
                     }
-                    prevtimestr=timestr
+                    prevmsgtime=msgtime
                     fflush()
                     next
                 }
