@@ -81,12 +81,14 @@ do
         [ "$bVerbose" ] && { host $mqtthost || nslookup $mqtthost ; ping -4 -c 1 $mqtthost ; ping -6 -c 1 $mqtthost ; }
         # ... used for checking: for h in test eclipse iot mosca hivemq emqx dash ; do echo ==== $h ==== ; mqtt-grep-color -W 3 -C 1 -v -h $h ; done
         ;;
-    t|T)  if [ "$OPTARG" != "${OPTARG%/}" ] ; then # implicitly add the MQTT wildcard hashtag to any trailing "/"           
-            topics="$topics -$opt $OPTARG#"    # topics="$topics -t $( echo "$t" | sed -e 's:/$:/\#:' )"
-        else
-            [ ! "$OPTARG" != "${OPTARG%#}" ] && cEchoErr "Warning: Option -$opt \"$OPTARG\" has no trailing / or \#, i.e. is not a wildcard topic"
-            topics="$topics -$opt $OPTARG"
-        fi
+    t|T) case "$OPTARG" in
+            \*|/) cEchoErr "Note: Replacing topic \"$OPTARG\" by \# ..." 
+                OPTARG=\# ;;
+            */) OPTARG="$OPTARG#" ;; # implicitly add the MQTT wildcard hashtag to any trailing "/" 
+            *\#) : ;;  # ok as is
+            *)   cEchoErr "Warning: Option -$opt \"$OPTARG\" has no trailing / or \#, i.e. is not a wildcard topic" ;; 
+        esac
+        topics="$topics -$opt $OPTARG" 
         ;;
     f)  inputfile="$OPTARG"
         ;;
@@ -96,7 +98,7 @@ do
         ;;
     R)  noretained="-R"
         ;;
-    D)  bRemoveRetained=1 # will continue with streaming after removing the retained messages...
+    D)  bRemoveRetained=1 # however, will continue with streaming after removing the retained messages...
         ;;
     l)  awkMinTopicChars="$( echo "$OPTARG" | cRemoveUnwantedChars )" # minimum length of outputted topic string (padded with spaces)
         ;;
@@ -120,7 +122,7 @@ do
         ;;
     x)  set -x # turn on shell debugging from here on
         ;;
-    v)  bVerbose="yes" # still unused...
+    v)  bVerbose="yes" # still mostly unused...
         ;;
     -)  echo "option -$opt not supported. Exiting." ; exit 1
         ;;
@@ -207,7 +209,7 @@ function subsm(s1, s2) {
                 # clean message (=remove non-printables) before printing:
                 gsub( /[^[:print:]]/ , "", topic )
                 gsub( /[^[:print:]]/ , "", message )
-                if ( verbose ) { print "MESSAGE(" isJSON "," optimizeJSON "): " message } ## FIXME
+                if ( verbose ) { print "DEBUGMSG(" isJSON "," optimizeJSON "): " message } ## FIXME
 
                 if ( optimizeJSON ) {
                     if ( isJSON ) {
