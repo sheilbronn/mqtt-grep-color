@@ -19,11 +19,15 @@ stdbufcmd=""
 stdbufcmd_tr=$( command -v stdbuf ) && stdbufcmd_tr="$stdbufcmd_tr --output=L" # use stdbuf for tr if it is available
 grepexp=""
 
-# color definitions from https://askubuntu.com/questions/1042234/modifying-the-color-of-grep :
-grey="01;30"; red="01;31"; green="01;32"; yellow="01;33"; iyellow="01;93"; blue="01;34" ; purple="01;35" ; cyan="01;36" ; white="01;37"
+# color definitions derived from from https://askubuntu.com/questions/1042234/modifying-the-color-of-grep :
+grey="mt=01;30"; red="mt=01;31"; green="mt=01;32"; yellow="mt=01;33"; iyellow="mt=01;93"; blue="mt=01;34" ; 
+purple="mt=01;35" ; cyan="mt=01;36" ; white="mt=01;37"
 
 # other settings for BusyBox grep - since it cannot colorize. And the option line-buffered is also missing.
 { grep --help 2>&1 | grep -q BusyBox ; } && BUSYBOX="yes" && stdbufcmd="$stdbufcmd_tr" # ... and stdbuf also for grep if on BusyBox
+
+cRemoveUnwantedChars() {  tr -d ')("^%$ \r\000-\011\013-\037' ; }
+cEchoErr() { echo "$scriptname: $*" 1>&2 ; }
 
 if [ "$BUSYBOX" ]
 then
@@ -54,8 +58,6 @@ awkDeltaTime=0            # default
 scriptname="${0##*/}"
 jsonppcmd="cat"
 
-cRemoveUnwantedChars() {  tr -d ')("^%$ \r\000-\011\013-\037' ; }
-cEchoErr() { echo "$scriptname: $*" 1>&2 ; }
 
 ### process command line options ###
 
