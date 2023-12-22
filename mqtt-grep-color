@@ -120,7 +120,7 @@ do
         awkTimeLen=3 # only the last three digits (len of %s is 11)
         awkDeltaTime=1
         ;;
-    o)  awkOptimizeJSON=1
+    o)  [ -z "$awkOptimizeJSON" ] && awkOptimizeJSON=1 || awkOptimizeJSON=2 # 0=none, 1=more, 2=less
         ;;
     x)  set -x # turn on shell debugging from here on
         ;;
@@ -215,7 +215,7 @@ function subsm(s1, s2) {
 
                 if ( optimizeJSON ) {
                     if ( isJSON ) {
-                        message=gensub( /^{ */                          , "{"     ,     g, message)  # remove opening space after JSON brace
+                        message=gensub( /^{ */                          , "{"     ,     g, message)  # remove space after first JSON brace
                         message=gensub( /" *: *(null|")/                , "\":\\1"   ,  g, message)  # remove any spaces around the JSON colon for text values or null
                         message=gensub( /" *:[ ]*(-*[0-9]*[.]*[0-9]*)/ ,  "\":\\1",     g, message)  # remove any spaces around the JSON colon for numeric values
                         message=gensub( / *,  *"/                      ,  ",\"" ,       g, message)  # reduce spaces around a comma to max one
@@ -225,7 +225,6 @@ function subsm(s1, s2) {
                             message=gensub( /"([a-zA-Z _]+)" *: *(\[?){/   , "\"XXcyanXX\\1XXcyanXX\":\\2{"  , g, message)  # highlight the name of a whole embedded object, e.g. device
 
                             message=gensub( /" *:( *)"([^"]+)"( *[,}]+)/  , "\":\\1\"XXwhiteXX\\2XXwhiteXX\"\\3" , g, message)  # highlight a quoted string value in JSON
-                            # message=gensub( /" *:( *)"([a-zA-z0-9]+)"( *[,}]+)/  , "\":\\1\"XXwhiteXX\\2XXwhiteXX\"\\3" , g, message)  # .. and remove quotes if single word
                             message=gensub( /" *:( *)(null|-{0,1}([0-9]*[.]{0,1}[0-9]*))( *[,}]+)/   , "\":\\1XXyellowXX\\2XXyellowXX\\4 " , g, message)  # highlight a numeric value in JSON
                             if (removeKeyQuotes) {
                                 message=gensub( /([,{] *)"([^"]+)"( *:)/            ,  "\\1XXnoneXX\\2XXnoneXX\\3" , g, message)  # highlight keys and remove apostrophes around keys
