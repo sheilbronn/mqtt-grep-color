@@ -183,7 +183,7 @@ function subsm(s1, s2) {
     message=gensub( s1, s3, "g", message)
 }
 
-/^[.)(a-z\/A-Z0-9$&%;_+-]{1,255} /  { # topics are assumed to have  a maximum length of 255, reduces amount of garbage (255 is max on OpenWrt)
+/^[.)(a-z\/A-Z0-9$&%;_+!-]{1,255} /  { # topics are assumed to have  a maximum length of 255, reduces amount of garbage (255 is max on OpenWrt)
                 g="g"
                 if ( isJSON && collectedMessage && noColor ) {
                     # print "*****" ; fflush() ; print collectedMessage #  jqcmd # | getline beauty ; print beauty ; system("sleep 1") ;
@@ -193,7 +193,7 @@ function subsm(s1, s2) {
                     # fflush() ;
                 }
                 isJSON=0
-                match($0, /^[.)(a-z\/A-Z0-9$&%;_+-]+/)
+                match($0, /^[.)(a-z\/A-Z0-9$&%;_+!-]+/) # Attention: regexp must be the same as above!
                 topiclength=RLENGTH
                 # if ( (imagedatatype != "") && ( topiclength<5 || firstslashpos>topiclength || topiclength==length($0)+1) ) {
                 topic=sprintf("%-*.*s", minTopicChars, topiclength, $0) # extract the topic, padding it with spaces up to minTopicChars for easier reading
@@ -201,17 +201,19 @@ function subsm(s1, s2) {
                 if (match(topic, /[^[:print:]]/)>0 || (imagedatatype != "" && firstslashpos==0 && topiclength<6) ) {
                     message=substr($0, topiclength+2, 40) "..."
                     topic="..skipping..." topic
+                    isToSkip=1
                     collectedMessage=""
                 } else {
                     message=substr($0, topiclength+2, 9999)
                     imagedatatype=match(message, "^" pngprefix ) ? "PNG" : ( match(message, "^" jpgprefix ) ? "JPEG" : "" )
                     isJSON=( index(message,"{") == 1 || index(message,"[") == 1)  # FIXME: check for "]" at message end, too
+                    isToSkip=0
                     collectedMessage=message
                 }
                 # clean message (=remove non-printables) before printing:
                 gsub( /[^[:print:]]/ , "", topic )
                 gsub( /[^[:print:]]/ , "", message )
-                if ( verbose ) { print "DEBUGMSG(" isJSON "," optimizeJSON "): " message } ## FIXME
+                if ( verbose ) { print "DEBUGMSG(" isJSON "," isToSkip "," optimizeJSON "): " message } ## FIXME
 
                 if ( optimizeJSON ) {
                     if ( isJSON ) {
