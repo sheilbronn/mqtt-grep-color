@@ -29,18 +29,15 @@ blue="mt=01;34" ; purple="mt=01;35" ; cyan="mt=01;36" ; white="mt=01;37"
 cRemoveUnwantedChars() {  tr -d ')("^%$ \r\000-\011\013-\037' ; }
 cEchoErr() { echo "$scriptname: $*" 1>&2 ; }
 
-if [ "$BUSYBOX" ]
-then
-    # I'm on BusyBox
+if [ "$BUSYBOX" ] ; then # I'm on BusyBox
     ### grepexp="^ *$|[\}{ ]|\[\]|\[\{|\}\]" # { must be escaped
     # colorizes  }{, etc. if no other grep expression given; space must be there!
     [ "$stdbufcmd_tr" ] || cEchoErr "Warning: Install stdbuf for better line buffering! (Package coreutils-stdbuf on OpenWrt)"
-else
-    # Not on BusyBox
+else # Not on BusyBox
     ### grepexp="^ *$|[\}{ ]|\[\]|\[{|\}\]"  # { must NOT be escaped
     # grepexp="$grepexp| PNG"
-    GREPOPTS="--text --color=always --line-buffered"
-    [ "$stdbufcmd_tr" ] || cEchoErr "Warning: Install stdbuf for better line buffering!"
+    GREPOPTS="--text ${NO_COLOR:---color=always} --line-buffered"
+    [ "$stdbufcmd_tr" ] || cEchoErr "Warning: Please install stdbuf for better line buffering!"
 fi
 
 cCmv()	{ command -v "$@" > /dev/null ; } # find out whether a command exists
@@ -180,7 +177,7 @@ function compare(s1, s2, anypos) {
     return anypos ? i : usepos
 }
 function subsm(s1, s2) {
-    message=gensub( s1, s3, "g", message)
+    message=gensub( s1, s2, "g", message)
 }
 
 /^[.)(a-z\/A-Z0-9$&%;_+!-]{1,255} /  { # topics are assumed to have  a maximum length of 255, reduces amount of garbage (255 is max on OpenWrt)
@@ -193,10 +190,11 @@ function subsm(s1, s2) {
                     # fflush() ;
                 }
                 isJSON=0
-                match($0, /^[.)(a-z\/A-Z0-9$&%;_+!-]+/) # Attention: regexp must be the same as above!
+                match($0, /^[.)(a-z\/A-Z0-9$&%;_+!-]+/) # Attention: regexp must be the same as above and further down ib the grep for the red color
                 topiclength=RLENGTH
                 # if ( (imagedatatype != "") && ( topiclength<5 || firstslashpos>topiclength || topiclength==length($0)+1) ) {
                 topic=sprintf("%-*.*s", minTopicChars, topiclength, $0) # extract the topic, padding it with spaces up to minTopicChars for easier reading
+                # print "TOPIC=" topic
                 firstslashpos=index(topic, "/")
                 if (match(topic, /[^[:print:]]/)>0 || (imagedatatype != "" && firstslashpos==0 && topiclength<6) ) {
                     message=substr($0, topiclength+2, 40) "..."
@@ -240,7 +238,7 @@ function subsm(s1, s2) {
                         gsub( /^\[0;3.m\[I\]/ , "" , message) # remove color garbage at beginning of message (e.g. from esphome)
                         gsub( /\[0m$/         , "" , message) # ... and color garbage at end of message 
                         gsub( /^-{0,1}[0-9]*[.]{0,1}[0-9]*$/, "XXyellowXX&XXyellowXX" , message) # ... and yellowfy a lonely number
-                        gsub( /^[a-zA-Z]{1,5}$/, "XXyellowXX&XXyellowXX" , message) # ... or a short lonely word
+                        gsub( /^[a-zA-Z]{1,5}$|^.nline$|^.ffline$|^ONLINE$|^OFFLINE$/, "XXyellowXX&XXyellowXX" , message) # ... or a short lonely word
                     }
 
 gsub(/"act_t" *:/,             "\"action_topic\":", message)
@@ -452,6 +450,8 @@ gsub(/"xy_val_tpl" *:/,         "\"xy_value_template\":", message)
                         }
                         if (topiclength>7 || firstslashpos>0 || timediff>0) { # if a (1) short topic, (2.) with no slashes, (3.) at the same time - probably not a topic
                             topic=substr(topic,1,cTopic) "XXbeginofredXX" substr(topic, cTopic+1,999) "XXendofredXX" substr("   ",1,topicdiff)
+                        } else {
+                            # print "TOPIC " topic " is too short or has no slashes or is at the same time as the previous one. Skipping."
                         }
                         cTime=(timediff==0) ? length(msgtime) : ( timediff<2 ? length(msgtime)-1 : 0 )
                         printf "%s %s %s \n" , substr(msgtime,1,cTime) "XXcol1timeXX" substr(msgtime,cTime+1,99) "XXcol1timeXX" , topic, message
@@ -469,7 +469,8 @@ gsub(/"xy_val_tpl" *:/,         "\"xy_value_template\":", message)
                     }
                 } '    \
 | if [ -z "$noColor" ] ; then
-      GREP_COLORS="$red"     $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXbeginofredXX[.)(/ a-zA-Z0-9$&%;_+-]+XXendofredXX'    \
+      # regexp for topic must be the same as above:                                 [.)(a-z\/A-Z0-9$&%;_+!-]
+      GREP_COLORS="$red"     $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXbeginofredXX[.)(/ a-zA-Z0-9$&%;_+!-]+XXendofredXX'    \
     | GREP_COLORS="$purple"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXbeginofpurpleXXhomeassistant/[.)(/a-zA-Z0-9$&%;_+-]+XXendofpurpleXX'    \
     | GREP_COLORS="$purple"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e '\$[a-z]+XXendofredXX'    \
     | GREP_COLORS="$yellow"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXcol1timeXX[0-9:]+XXcol1timeXX|XXyellowXX[^X]+XXyellowXX'   \
