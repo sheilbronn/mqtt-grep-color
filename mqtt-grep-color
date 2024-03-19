@@ -159,7 +159,7 @@ BEGIN       {   jqcmd="jq ."  ; # jqcmd="cat"
                 PROCINFO[jqcmd, "RETRY"] = 1
                 # pngprefix=sprintf("%c%c%c%c%c%c%c%c", 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
                 pngprefix=sprintf("%c%c%c%c%c", 0x89, 0x50, 0x4E, 0x47, 0x0D) # reduced number of signature bytes as a workaround because of line split
-                jpgprefix=sprintf("%c%c%c",   0xFF, 0xD8, 0xFF)         # shortened workaround for JPEG/JFIF
+                jpgprefix=sprintf("%c%c%c",   0xFF, 0xD8, 0xFF)         # shortened workaround for JPEG and JFIF
                 t=systime()
                 mintopicsize=3
                 }
@@ -215,14 +215,15 @@ function subsm(s1, s2) {
 
                 if ( optimizeJSON ) {
                     if ( isJSON ) {
-                        message=gensub( /^{ */                          , "{"     ,     g, message)  # remove space after first JSON brace
-                        message=gensub( /" *: *(null|")/                , "\":\\1"   ,  g, message)  # remove any spaces around the JSON colon for text values or null
-                        message=gensub( /" *:[ ]*(-*[0-9]*[.]*[0-9]*)/ ,  "\":\\1",     g, message)  # remove any spaces around the JSON colon for numeric values
-                        message=gensub( / *,  *"/                      ,  ",\"" ,       g, message)  # reduce spaces around a comma to max one
-                        # message=gensub( /":([0-9])(, *")/            , "\": \\1\\2",  g, message)  # pad any one-digit number with one space for better alignment across messages
-                        message=gensub( /"Time" *:"[0-9T:-]*",/        , ""          ,  g, message)  # eliminate the first "Time" key/value but only if it is followed by a comma (=has further key(s))
+                        message=gensub( /^{ */                        , "{"     ,   g, message)  # remove space after first JSON brace
+                        message=gensub( /" *: *(null|")/              , "\":\\1"  , g, message)  # remove any spaces around the JSON colon for text values or null
+                        message=gensub( /" *:[ ]*(-?[0-9]*\.?[0-9]*)/ , "\":\\1",   g, message)  # remove any spaces around the JSON colon for numeric values
+                        # FIXME: message=gensub( /":(-?[0-9]+)\.(0*[1-9]*)?0/ , "\":\\1.\\2",g, message)  # remove one trailing zero in a JSON numeric value
+                        message=gensub( / *,  *"/                     ,  ",\"" ,    g, message)  # reduce spaces around a comma to max one
+                        # message=gensub( /":([0-9])(, *")/           , "\": \\1\\2", g, message)  # pad any one-digit number with one space for better alignment across messages
+                        message=gensub( /"Time" *:"[0-9T:-]*",/       , ""        , g, message)  # eliminate the first "Time" key/value but only if it is followed by a comma (=has further key(s))
                         if (!noColor) {
-                            message=gensub( /"([a-zA-Z _]+)" *: *(\[?) *{/  , "\"XXcyanXX\\1XXcyanXX\":\\2{"  , g, message)  # highlight the name of a whole embedded object
+                            message=gensub( /"([a-zA-Z _]+)" *: *(\[?) *{/  , "\"XXcyanXX\\1XXcyanXX\":\\2{", g, message)  # highlight the name of a whole embedded object
                             message=gensub( /"([a-zA-Z _]+)" *: *(\[ *\])/  , "\"XXcyanXX\\1XXcyanXX\":\\2" , g, message)  # highlight the name of an empty array
                             message=gensub( /" *:( *)"([^"]+)"( *[,}]+)/  , "\":\\1\"XXwhiteXX\\2XXwhiteXX\"\\3" , g, message)  # highlight a quoted string value in JSON
                             message=gensub( /" *:( *)(null|-{0,1}([0-9]*[.]{0,1}[0-9]*))( *[,}]+)/   , "\":\\1XXyellowXX\\2XXyellowXX\\4 " , g, message)  # highlight a numeric value in JSON
