@@ -55,13 +55,15 @@ awkDeltaTime=0            # default
 scriptname="${0##*/}"
 jsonppcmd="cat"
 
-
 ### process command line options ###
 
 while getopts "?e:h:t:T:f:p:W:RDl:C:SrsconPxv-" opt
 do
     case "$opt" in
-    \?) cEchoErr "Usage: $scriptname -e expr -h host -x -v -t topic1 -t topic2 -o -C maxcnt -p port -P  --  othermosquittoopts"
+    \?) cEchoErr "Usage: $scriptname -e expr -h mqtt_host -t topic1 -T topic2 -o -e grepexp -p port -P  --  othermosquittoopts
+    Special options: -o(ptimize JSON), -D(elete retained msges), -R(dont list retained), -W MQTT_ timeout, -l minTopicChars, 
+    -C maxmsgcount, -s suppress attrs, -P(retty print JSON), -r(emove JSON key quotes), -n(o color), -c(omment line), 
+    -v(erbose), -f inputfile, -x(debug output)"
         exit 1
         ;;
     e)  grepexp="$OPTARG"
