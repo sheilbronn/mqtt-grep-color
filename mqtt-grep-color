@@ -152,9 +152,16 @@ if [ -n "$inputfile" ] ; then
     cat "$inputfile"
 else
     _ms_options="${mqtthost:+-h $mqtthost} ${port:+-p $port} -v $topics $noretained $maxcount $messageTimeOut $*"
-    [ "$bRemoveRetained" ] && mosquitto_sub $_ms_options -W 1 --retained-only --remove-retained 2>&1 | 
-       awk -v topics="$topics" '/^Timed out/ { next } { count++ ; print } BEGIN { print "=== Removing retained messages with topics: " topics " ===" ; count=0 } END { print "=== Removed " count " retained messages. ===" }' # grep -v "^Timed out$"
-    [ "$bVerbose" ] && cEchoErr "mosquitto_sub options: $_ms_options"
+    if [ "$bRemoveRetained" ] ; then
+        ifDebug && echo "Running: mosquitto_sub $_ms_options -W 1 --retained-only --remove-retained"
+        mosquitto_sub $_ms_options -W 1 --retained-only --remove-retained 2>&1 | 
+        awk -v topics="$topics" '
+            /^Timed out/ { next } 
+            { count++ ; print } 
+            BEGIN { print "=== Removing retained messages with topics: " topics " ===" ; count=0 } 
+            END   { print "=== Removed " count " retained messages. ===" }'
+    fi
+    ifDebug && cEchoErr "mosquitto_sub options: $_ms_options"
     mosquitto_sub $_ms_options
 fi |
 gawk -b -v timeLen="$awkTimeLen" -v timeFormat="$awkTimeFormat" -v deltaTime="$awkDeltaTime" -v verbose="$bVerbose" -v removeKeyQuotes="$awkRemoveKeyQuotes" \
@@ -200,8 +207,10 @@ function subsm(s1, s2) {
                 isJSON=0
                 match($0, /^[.)(a-z\/A-Z0-9$&%;_+!-]+/) # Attention: regexp must be the same as above and further down ib the grep for the red color
                 topiclength=RLENGTH
-                # if ( (imagedatatype != "") && ( topiclength<5 || firstslashpos>topiclength || topiclength==length($0)+1) ) {
-                topic=sprintf("%-*.*s", minTopicChars, topiclength, $0) # extract the topic, padding it with spaces up to minTopicChars for easier reading
+                if (topiclength < oldTopicLength-3) { oldTopicLength=0 } # reset old topic length if too short
+                    
+                topic=sprintf("%-*.*s", MAX(minTopicChars,oldTopicLength), topiclength, $0)
+                oldTopicLength=length(topic)
                 # print "TOPIC=" topic
                 firstslashpos=index(topic, "/")
                 if (match(topic, /[^[:print:]]/)>0 || (imagedatatype != "" && firstslashpos==0 && topiclength<6) ) {
@@ -222,13 +231,14 @@ function subsm(s1, s2) {
                 if ( verbose ) { print "DEBUGMSG(" isJSON "," isToSkip "," optimizeJSON "): " message } ## FIXME
 
                 if ( optimizeJSON ) {
-                    if ( isJSON ) {
-                        message=gensub( /^{ */                        , "{"     ,   g, message)  # remove space after first JSON brace
-                        message=gensub( /" *: *(null|")/              , "\":\\1"  , g, message)  # remove any spaces around the JSON colon for text values or null
+                    if ( isJSON ) {                        
+                        message=gensub( / *} *$/ , "}", g, message) # remove any white space around the JSON closing bracket:
+                        message=gensub( /^ *{ */                        , "{"     ,   g, message)  # remove any spaces around the JSON opening bracket
+                        message=gensub( /" *: *(null|")/              , "\":\\1",   g, message)  # remove any spaces around the JSON colon for text values or null
                         message=gensub( /" *:[ ]*(-?[0-9]*\.?[0-9]*)/ , "\":\\1",   g, message)  # remove any spaces around the JSON colon for numeric values
-                        # FIXME: message=gensub( /":(-?[0-9]+)\.(0*[1-9]*)?0/ , "\":\\1.\\2",g, message)  # remove one trailing zero in a JSON numeric value
-                        message=gensub( / *,  *"/                     ,  ",\"" ,    g, message)  # reduce spaces around a comma to max one
-                        # message=gensub( /":([0-9])(, *")/           , "\": \\1\\2", g, message)  # pad any one-digit number with one space for better alignment across messages
+                        message=gensub( /(-?[0-9]+)\.([0-9])([0-9]*[1-9])?0*( *[,}])/, "\\1.\\2\\3\\4",g, message)  # remove all but a single trailing digit in a JSON numeric value
+                        message=gensub( / *,  *"/                     ,  ",\"" ,    g, message)  # reduce spaces around any comma to at most one
+                        # message=gensub( /":([0-9])(, *")/           , "\": \\1\\2", g, message) # pad any one-digit number with one space for better alignment across messages
                         message=gensub( /"Time" *:"[0-9T:-]*",/       , ""        , g, message)  # eliminate the first "Time" key/value but only if it is followed by a comma (=has further key(s))
                         if (!noColor) {
                             message=gensub( /"([a-zA-Z _]+)" *: *(\[?) *{/  , "\"XXcyanXX\\1XXcyanXX\":\\2{", g, message)  # highlight the name of a whole embedded object
@@ -237,7 +247,7 @@ function subsm(s1, s2) {
                             message=gensub( /" *:( *)(null|-{0,1}([0-9]*[.]{0,1}[0-9]*))( *[,}]+)/   , "\":\\1XXyellowXX\\2XXyellowXX\\4 " , g, message)  # highlight a numeric value in JSON
                             gsub( /" *:( *)\[ *\]/   , "\":XXyellowXX[]XXyellowXX" , message)  # highlight and shorten empty arrays (brackets only)
                             if (removeKeyQuotes) {
-                                message=gensub( /([,{] *)"([^"]+)"( *:)/            ,  "\\1XXnoneXX\\2XXnoneXX\\3" , g, message)  # highlight keys and remove apostrophes around keys
+                                message=gensub( /([,{] *)"([^"]+)"( *:)/            ,  "\\1XXnoneXX\\2XXnoneXX:" , g, message)  # highlight keys and remove double quotes around keys
                                 message=gensub( /([,{] *)\\"([^\\"]+)\\" *:/      ,  "\\1*\\2*:" , g, message)  # modify escaping slashes for quotes around keys within messages: 
                                 message=gensub( /: *\\"([^\\"]*)\\"()/      ,  ":*\\1*\\2" , g, message)  #  ... and for escaping slashes around values, too.
                                 # { ..., payload {\"linkquality\":44, \"state\":\"OFF\",\"update\":{\"installed_version\":16909577, \"latest_version\":16909577, \"state\":\"idle\"},\"update_available\":false}"}
@@ -481,14 +491,14 @@ function subsm(s1, s2) {
       # regexp for topic must be the same as above:                                 [.)(a-z\/A-Z0-9$&%;_+!-]
       GREP_COLORS="$red"     $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXbeginofredXX[.)(/ a-zA-Z0-9$&%;_+!-]+XXendofredXX'    \
     | GREP_COLORS="$purple"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXbeginofpurpleXXhomeassistant/[.)(/a-zA-Z0-9$&%;_+-]+XXendofpurpleXX'    \
-    | GREP_COLORS="$purple"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e '\$[a-z]+XXendofredXX'    \
+    | GREP_COLORS="$purple"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e '\$[a-z]+XXendofredXX'   \
     | GREP_COLORS="$yellow"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXcol1timeXX[0-9:]+XXcol1timeXX|XXyellowXX[^X]+XXyellowXX'   \
-    | { [ -z "$grepexp" ] && cat || GREP_COLORS="$green"   $stdbufcmd  grep $GREPOPTS -E        -e "$grepexp" ; }   \
-    | GREP_COLORS="$blue"    $stdbufcmd  grep $GREPOPTS -E -e "^" -e "nomorexxxxxxxx,"        \
-    | GREP_COLORS="$grey"    $stdbufcmd  grep $GREPOPTS -E -e "^" -e " \{|,|\}$"        \
+    | { [ -z "$grepexp" ] && cat || GREP_COLORS="$green" $stdbufcmd grep $GREPOPTS -E        -e "$grepexp" ; }   \
+    | GREP_COLORS="$blue"    $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'nomorexxxxxxxx,'       \
+    | GREP_COLORS="$grey"    $stdbufcmd  grep $GREPOPTS -E -e "^" -e ' \{|,|\} *$|XXgreyXX[^X]+XXgreyXX'        \
     | GREP_COLORS="$white"   $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXwhiteXX[^X]+XXwhiteXX'       \
     | GREP_COLORS="$cyan"    $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXcyanXX[^:]+XXcyanXX'       \
-    | awk -- '{ gsub( "XXcol1timeXX|XXbeginofredXX|XXendofredXX|XXbeginofpurpleXX|XXendofpurpleXX|XXwhiteXX|XXcyanXX|XXyellowXX|XXnoneXX" , "" ); print }' \
+    | { awk -- '{ gsub( "XXcol1timeXX|XXbeginofgreyXX|XXendofgreyXX|XXbeginofredXX|XXendofredXX|XXbeginofpurpleXX|XXendofpurpleXX|XXwhiteXX|XXcyanXX|XXyellowXX|XXnoneXX" , "" ); print }' ;} \
     ;
 else
     cat
