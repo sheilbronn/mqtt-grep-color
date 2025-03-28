@@ -1,4 +1,5 @@
 #!/bin/sh
+
 # shellcheck shell=dash
 
 # Usage: mqtt-grep-color -e expr -h host -d -t topic  othermosquittoopts
@@ -19,7 +20,7 @@ stdbufcmd=""
 stdbufcmd_tr=$( command -v stdbuf ) && stdbufcmd_tr="$stdbufcmd_tr --output=L" # use stdbuf for tr if it is available
 grepexp=""
 
-# color definitions derived from from https://askubuntu.com/questions/1042234/modifying-the-color-of-grep :
+# color definitions derived from https://askubuntu.com/questions/1042234/modifying-the-color-of-grep :
 grey="mt=01;30"; red="mt=01;31"; green="mt=01;32"; yellow="mt=01;33"; iyellow="mt=01;93" ; 
 blue="mt=01;34" ; purple="mt=01;35" ; cyan="mt=01;36" ; white="mt=01;37"
 
@@ -52,7 +53,6 @@ messageTimeOut="-v" # use "-v" to make sure $messageTimeOut   is not an empty op
 awkTimeFormat="%H%M%S"
 awkTimeLen=6           # for "mm:ss"
 awkDeltaTime=0            # default is wallclock time, not delta time
-scriptname="${0##*/}"
 jsonppcmd=cat # default is no pretty printing (=cat)
 
 ### process command line options ###
@@ -87,6 +87,7 @@ do
                 OPTARG=\# ;;
             */) OPTARG="$OPTARG#" ;; # implicitly add the MQTT wildcard hashtag to any trailing "/" 
             *\#) : ;;  # ok as is
+            *+*) : ;;  # ok as is
             *)   cEchoErr "Warning: Option -$opt \"$OPTARG\" has no trailing / or \#, i.e. is not a wildcard topic" ;; 
         esac
         topics="$topics -$opt $OPTARG" 
@@ -156,9 +157,9 @@ else
         ifDebug && echo "Running: mosquitto_sub $_ms_options -W 1 --retained-only --remove-retained"
         mosquitto_sub $_ms_options -W 1 --retained-only --remove-retained 2>&1 | 
         awk -v topics="$topics" '
+            BEGIN { print "=== Removing retained messages with topics: " topics " ===" ; count=0 } 
             /^Timed out/ { next } 
             { count++ ; print } 
-            BEGIN { print "=== Removing retained messages with topics: " topics " ===" ; count=0 } 
             END   { print "=== Removed " count " retained messages. ===" }'
     fi
     ifDebug && cEchoErr "mosquitto_sub options: $_ms_options"
@@ -182,7 +183,7 @@ function MAX(a,b) { return a > b ? a : b }
 function compare(s1, s2, anypos) {
     usepos=0
     s2=s2 "/" # FIXME/TEST: Nicer if previous string is shorter than new string
-    maxlen=MAX( length(s1), length(s2))
+    maxlen=MAX(length(s1), length(s2))
     for (i=1 ; i<=maxlen && substr(s1,i,1) == substr(s2,i,1) ; i++)  { 
         if (substr(s1,i,1)=="/") {
             usepos=i
