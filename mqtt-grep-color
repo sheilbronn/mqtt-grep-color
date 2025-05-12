@@ -29,6 +29,7 @@ blue="mt=01;34" ; purple="mt=01;35" ; cyan="mt=01;36" ; white="mt=01;37"
 
 cRemoveUnwantedChars() {  tr -d ')("^%$ \r\000-\011\013-\037' ; }
 cEchoErr() { echo "$scriptname: $*" 1>&2 ; }
+alias ifDebug='[ "$bVerbose" ]'
 
 if [ "$BUSYBOX" ] ; then # I'm on BusyBox
     ### grepexp="^ *$|[\}{ ]|\[\]|\[\{|\}\]" # { must be escaped
@@ -53,11 +54,11 @@ messageTimeOut="-v" # use "-v" to make sure $messageTimeOut   is not an empty op
 awkTimeFormat="%H%M%S"
 awkTimeLen=6           # for "mm:ss"
 awkDeltaTime=0            # default is wallclock time, not delta time
-jsonppcmd=cat # default is no pretty printing (=cat)
+jsonppcmd="cat" # default is no pretty printing (=cat)
 
 ### process command line options ###
 
-while getopts "?e:h:t:T:f:p:W:RDl:C:SrsconPxv-" opt
+while getopts "?e:h:t:T:f:p:W:RDl:C:SrsconF:Pxv-" opt
 do
     case "$opt" in
     \?) cEchoErr "Usage: $scriptname -e expr -h mqtt_host -t topic1 -T topic2 -o -e grepexp -p port -P  --  othermosquittoopts
@@ -104,13 +105,17 @@ do
         ;;
     l)  awkMinTopicChars="$( echo "$OPTARG" | cRemoveUnwantedChars )" # minimum length of outputted topic string (padded with spaces)
         ;;
-    C)  maxcount="-C $( echo "$OPTARG" | cRemoveUnwantedChars )" # clean up for sec purposes
+    C)  maxcount="-C $( echo "$OPTARG" | cRemoveUnwantedChars )" # clean arg for sec purposes
         ;;
     n)  noColor=1
         ;;
     c)  awkAdditionalSkipLines=1
         ;;
-    P)  cCmv json_pp && jsonppcmd=json_pp || cEchoErr "Warning: json_pp not found..."
+    F) # highlight certain prefixes of MQTT topics (multiple)
+        awkHightlightPreFixes="$( echo "$OPTARG" | cRemoveUnwantedChars )"
+        ;;
+    P)  # try to pretty print any JSON payload
+        cCmv json_pp && jsonppcmd=json_pp || cEchoErr "Warning: json_pp not found..."
         ;;
     r)  awkRemoveKeyQuotes=1
         ;;
@@ -138,7 +143,6 @@ if [ -z "$topics" ] ; then
     topics="-t #"         # use '#' as default MQTT topic if nothing else given
 fi
 
-alias ifDebug='[ "$bVerbose" ]'
 noColor="${noColor:-$NO_COLOR}" # if not set, use the global setting
 
 # These are the basic steps for processing the MQTT stream:
@@ -166,7 +170,8 @@ else
     mosquitto_sub $_ms_options
 fi |
 gawk -b -v timeLen="$awkTimeLen" -v timeFormat="$awkTimeFormat" -v deltaTime="$awkDeltaTime" -v verbose="$bVerbose" -v removeKeyQuotes="$awkRemoveKeyQuotes" \
-      -v optimizeJSON="$awkOptimizeJSON" -v noColor="$noColor" -v additionalSkipLines="$awkAdditionalSkipLines" -v minTopicChars="${awkMinTopicChars:-1}" '
+      -v optimizeJSON="$awkOptimizeJSON" -v noColor="$noColor" -v additionalSkipLines="$awkAdditionalSkipLines" -v minTopicChars="${awkMinTopicChars:-1}" \
+      -v hightlightPreFixes="$awkHightlightPreFixes" '
 BEGIN       {   jqcmd="jq ."  ; # jqcmd="cat"
                 # PROCINFO[jqcmd, "READ_TIMEOUT"] = 1000
                 PROCINFO[jqcmd, "RETRY"] = 1
@@ -468,10 +473,19 @@ function subsm(s1, s2) {
                             }
                             prevtopic=topic # save topic content for the next message
                         }
-                        if (topiclength>7 || firstslashpos>0 || timediff>0) { # if a (1) short topic, (2.) with no slashes, (3.) at the same time - probably not a topic
-                            topic="XXbeginofgreyXX" substr(topic,1,cTopic) "XXendofgreyXX" "XXbeginofredXX" substr(topic, cTopic+1,999) "XXendofredXX" substr("   ",1,topicdiff)
+                        if (topiclength>7 || firstslashpos>0 || timediff>0) { # if a (1) longer topic, (2.) with slashes, (3.) not at the same time - probably a topic
+                            firstgreypos=1
+                            # if topic beginning matches hightlightPreFixes, set firstgreypos to the end of the prefix
+                            # if (length(hightlightPreFixes)>0 && index(topic,hightlightPreFixes)==1  ) {
+                            if (length(hightlightPreFixes)>0 && match(topic,hightlightPreFixes)>0  ) {
+                                firstgreypos=RLENGTH+1
+                                topic="XXbeginofpurpleXX" substr(topic,1,firstgreypos-1) "XXendofpurpleXX" "XXbeginofgreyXX" substr(topic,firstgreypos,cTopic-firstgreypos+1) "XXendofgreyXX" "XXbeginofredXX" substr(topic, MAX(cTopic+1,firstgreypos),999) "XXendofredXX" substr("   ",1,topicdiff)
+                            } else {
+                                topic="XXbeginofgreyXX" substr(topic,firstgreypos,cTopic) "XXendofgreyXX" "XXbeginofredXX" substr(topic, cTopic+1,999) "XXendofredXX" substr("   ",1,topicdiff)
+                            }
                         } else {
                             # print "TOPIC " topic " is too short or has no slashes or is at the same time as the previous one. Skipping."
+                            # --> leave topic as is
                         }
                         cTime=(timediff==0) ? length(msgtime) : ( timediff<2 ? length(msgtime)-1 : 0 )
                         printf "%s %s %s \n" , substr(msgtime,1,cTime) "XXcol1timeXX" substr(msgtime,cTime+1,99) "XXcol1timeXX" , topic, message
@@ -492,6 +506,7 @@ function subsm(s1, s2) {
       # regexp for topic must be the same as above:                                 [.)(a-z\/A-Z0-9$&%;_+!-]
       GREP_COLORS="$red"     $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXbeginofredXX[.)(/ a-zA-Z0-9$&%;_+!-]+XXendofredXX'    \
     | GREP_COLORS="$purple"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXbeginofpurpleXXhomeassistant/[.)(/a-zA-Z0-9$&%;_+-]+XXendofpurpleXX'    \
+    | GREP_COLORS="$purple"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXbeginofpurpleXX[./a-zA-Z0-9_+-]+XXendofpurpleXX'    \
     | GREP_COLORS="$purple"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e '\$[a-z]+XXendofredXX'   \
     | GREP_COLORS="$yellow"  $stdbufcmd  grep $GREPOPTS -E -e "^" -e 'XXcol1timeXX[0-9:]+XXcol1timeXX|XXyellowXX[^X]+XXyellowXX'   \
     | { [ -z "$grepexp" ] && cat || GREP_COLORS="$green" $stdbufcmd grep $GREPOPTS -E        -e "$grepexp" ; }   \
